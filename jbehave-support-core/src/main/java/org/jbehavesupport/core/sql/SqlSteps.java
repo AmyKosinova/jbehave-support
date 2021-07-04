@@ -1,12 +1,13 @@
 package org.jbehavesupport.core.sql;
 
+import static org.jbehavesupport.core.sql.SqlSteps.ExceptionHandling.CATCH_EXCEPTION;
+import static org.jbehavesupport.core.sql.SqlSteps.ExceptionHandling.THROW_EXCEPTION;
 import static org.jbehavesupport.core.support.TestContextUtil.putDataIntoContext;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.util.Assert.isTrue;
 import static org.springframework.util.Assert.notNull;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -14,8 +15,10 @@ import java.util.stream.IntStream;
 
 import javax.sql.DataSource;
 
+import lombok.RequiredArgsConstructor;
 import org.jbehavesupport.core.TestContext;
 import org.jbehavesupport.core.expression.ExpressionEvaluatingParameter;
+import org.jbehavesupport.core.internal.sql.InterceptingNamedParameterJdbcTemplate;
 import org.jbehavesupport.core.internal.verification.ContainsVerifier;
 import org.jbehavesupport.core.internal.verification.EqualsVerifier;
 
@@ -29,15 +32,17 @@ import org.jbehave.core.model.ExamplesTable;
 import org.jbehavesupport.core.internal.ExampleTableConstraints;
 import org.jbehavesupport.core.internal.ExamplesTableUtil;
 import org.jbehavesupport.core.internal.MetadataUtil;
+import org.jbehavesupport.core.report.extension.SqlXmlReporterExtension;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.BeanFactoryAnnotationUtils;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.dao.DataAccessException;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedCaseInsensitiveMap;
 
 @Component
+@RequiredArgsConstructor
 public final class SqlSteps {
 
     private static final String SQL_RESULT_KEY = "sql_result";
@@ -45,32 +50,54 @@ public final class SqlSteps {
     private static final String MISSING_SQL_MESSAGE = "sql query must be run and saved in context prior to this step";
     private static final String SQL_EXCEPTION_KEY = "sql_exception";
 
-    @Autowired
-    private ConfigurableListableBeanFactory beanFactory;
-    @Autowired
-    private TestContext testContext;
+    private final ConfigurableListableBeanFactory beanFactory;
 
-    @Autowired
-    private EqualsVerifier equalsVerifier;
+    private final TestContext testContext;
 
-    @Autowired
-    private ContainsVerifier containsVerifier;
+    private final EqualsVerifier equalsVerifier;
+
+    private final ContainsVerifier containsVerifier;
+
+    @Autowired(required = false)
+    private SqlXmlReporterExtension sqlXmlReporterExtension;
+
+    enum ExceptionHandling {
+        THROW_EXCEPTION,
+        CATCH_EXCEPTION
+    }
 
     @Given("this query is performed on [$databaseId]:$sqlStatement")
     @When("this query is performed on [$databaseId]:$sqlStatement")
     public void executeQuery(String databaseId, ExpressionEvaluatingParameter<String> sqlStatement) {
         checkSqlException();
-        executeQuery(databaseId, sqlStatement, new ExamplesTable(""));
+        executeQuery(databaseId, sqlStatement, new ExamplesTable(""), THROW_EXCEPTION);
+    }
+
+    @Given("this query with expected exception is performed on [$databaseId]:$sqlStatement")
+    @When("this query with expected exception is performed on [$databaseId]:$sqlStatement")
+    public void executeQueryCatchException(String databaseId, ExpressionEvaluatingParameter<String> sqlStatement) {
+        checkSqlException();
+        executeQuery(databaseId, sqlStatement, new ExamplesTable(""), CATCH_EXCEPTION);
     }
 
     @Given(value = "this query is performed on [$databaseId]:$sqlStatement with parameters:$parameters", priority = 100)
     @When(value = "this query is performed on [$databaseId]:$sqlStatement with parameters:$parameters", priority = 100)
     public void executeQuery(String databaseId, ExpressionEvaluatingParameter<String> sqlStatement, ExamplesTable parameters) {
+        executeQuery(databaseId, sqlStatement, parameters, THROW_EXCEPTION);
+    }
+
+    @Given(value = "this query with expected exception is performed on [$databaseId]:$sqlStatement with parameters:$parameters", priority = 100)
+    @When(value = "this query with expected exception is performed on [$databaseId]:$sqlStatement with parameters:$parameters", priority = 100)
+    public void executeQueryCatchException(String databaseId, ExpressionEvaluatingParameter<String> sqlStatement, ExamplesTable parameters) {
+        executeQuery(databaseId, sqlStatement, parameters, CATCH_EXCEPTION);
+    }
+
+    private void executeQuery(String databaseId, ExpressionEvaluatingParameter<String> sqlStatement, ExamplesTable parameters, ExceptionHandling exceptionHandling) {
         checkSqlException();
         putDataIntoContext(testContext, parameters, ExampleTableConstraints.ALIAS, ExampleTableConstraints.DATA);
         String resolvedStatement = sqlStatement.getValue();
 
-        List<Map<String, Object>> result = new ArrayList<>();
+        List<Map<String, Object>> result;
 
         try {
             result = resolveJdbcTemplate(databaseId)
@@ -79,6 +106,9 @@ public final class SqlSteps {
             testContext.put(SQL_QUERY_KEY, resolvedStatement);
         } catch (DataAccessException e) {
             testContext.put(SQL_EXCEPTION_KEY, e);
+            if (exceptionHandling != CATCH_EXCEPTION) {
+                throw e;
+            }
         }
     }
 
@@ -86,12 +116,29 @@ public final class SqlSteps {
     @When("this update is performed on [$databaseId]:$sqlStatement")
     public void executeUpdate(String databaseId, ExpressionEvaluatingParameter<String> sqlStatement) {
         checkSqlException();
-        executeUpdate(databaseId, sqlStatement, new ExamplesTable(""));
+        executeUpdate(databaseId, sqlStatement, new ExamplesTable(""), THROW_EXCEPTION);
+    }
+
+    @Given("this update with expected exception is performed on [$databaseId]:$sqlStatement")
+    @When("this update with expected exception is performed on [$databaseId]:$sqlStatement")
+    public void executeUpdateCatchException(String databaseId, ExpressionEvaluatingParameter<String> sqlStatement) {
+        checkSqlException();
+        executeUpdate(databaseId, sqlStatement, new ExamplesTable(""), CATCH_EXCEPTION);
     }
 
     @Given(value = "this update is performed on [$databaseId]:$sqlStatement with parameters:$parameters", priority = 100)
     @When(value = "this update is performed on [$databaseId]:$sqlStatement with parameters:$parameters", priority = 100)
     public void executeUpdate(String databaseId, ExpressionEvaluatingParameter<String> sqlStatement, ExamplesTable parameters) {
+        executeUpdate(databaseId, sqlStatement, parameters, THROW_EXCEPTION);
+    }
+
+    @Given(value = "this update with expected exception is performed on [$databaseId]:$sqlStatement with parameters:$parameters", priority = 100)
+    @When(value = "this update with expected exception is performed on [$databaseId]:$sqlStatement with parameters:$parameters", priority = 100)
+    public void executeUpdateCatchException(String databaseId, ExpressionEvaluatingParameter<String> sqlStatement, ExamplesTable parameters) {
+        executeUpdate(databaseId, sqlStatement, parameters, CATCH_EXCEPTION);
+    }
+
+    private void executeUpdate(String databaseId, ExpressionEvaluatingParameter<String> sqlStatement, ExamplesTable parameters, ExceptionHandling exceptionHandling) {
         checkSqlException();
         putDataIntoContext(testContext, parameters, ExampleTableConstraints.ALIAS, ExampleTableConstraints.DATA);
         String resolvedStatement = sqlStatement.getValue();
@@ -100,11 +147,13 @@ public final class SqlSteps {
                 .convertMap(parameters, ExampleTableConstraints.NAME, ExampleTableConstraints.DATA));
         } catch (DataAccessException e) {
             testContext.put(SQL_EXCEPTION_KEY, e);
+            if (exceptionHandling != CATCH_EXCEPTION) {
+                throw e;
+            }
         }
 
         testContext.put(SQL_QUERY_KEY, resolvedStatement);
     }
-
 
     @Given("these columns from the single-row query result are saved:$storedData")
     @When("these columns from the single-row query result are saved:$storedData")
@@ -138,12 +187,12 @@ public final class SqlSteps {
         }
     }
 
-    private String getTestContextAliasOrFieldName(final Map<String, String> row) {
+    private String getTestContextAliasOrFieldName(Map<String, String> row) {
         return row.containsKey(ExampleTableConstraints.ALIAS) ? row.get(ExampleTableConstraints.ALIAS) : row.get(ExampleTableConstraints.NAME);
     }
 
     private void checkColumnPresentInResultSet(Map<String, Object> resultRow, Map<String, String> row) {
-        if (!resultRow.keySet().contains(row.get(ExampleTableConstraints.NAME).toUpperCase())) {
+        if (!resultRow.containsKey(row.get(ExampleTableConstraints.NAME).toUpperCase())) {
             throw new IllegalArgumentException("Column " + row.get(ExampleTableConstraints.NAME).toUpperCase() + " is not present in result set");
         }
     }
@@ -178,7 +227,7 @@ public final class SqlSteps {
         compareExampleTableVersusListOfMaps(presentData, false);
     }
 
-    private void compareExampleTableVersusListOfMaps(ExamplesTable compareData, Boolean strictMatch) {
+    private void compareExampleTableVersusListOfMaps(ExamplesTable compareData, boolean strictMatch) {
         notNull(compareData, "matching data can't be null");
 
         ArrayList<Map<String, Object>> queryResultsToMatch = new ArrayList<>();
@@ -186,7 +235,9 @@ public final class SqlSteps {
             .map(String::toUpperCase)
             .collect(Collectors.toCollection(ArrayList::new));
 
-        for (Map<String, Object> row : getSqlResult()) {
+        for (Map<String, Object> originalRow : getSqlResult()) {
+            // do not manipulate original row in case of additional saving/verification
+            LinkedCaseInsensitiveMap<Object> row = copyResultRow(originalRow);
             row.entrySet().removeIf(r -> !upperCaseHeaders.contains(r.getKey()));
             if (!row.isEmpty()) {
                 queryResultsToMatch.add(row);
@@ -218,16 +269,16 @@ public final class SqlSteps {
         return testContext.get(SQL_RESULT_KEY);
     }
 
-    private NamedParameterJdbcTemplate resolveJdbcTemplate(String databaseId) {
+    private InterceptingNamedParameterJdbcTemplate resolveJdbcTemplate(String databaseId) {
         try {
             DataSource dataSource = BeanFactoryAnnotationUtils.qualifiedBeanOfType(beanFactory, DataSource.class, databaseId);
-            return new NamedParameterJdbcTemplate(dataSource);
+            return new InterceptingNamedParameterJdbcTemplate(dataSource, sqlXmlReporterExtension);
         } catch (NoSuchBeanDefinitionException e) {
             throw new IllegalArgumentException("SqlSteps requires single DataSource bean with qualifier [" + databaseId + "]", e);
         }
     }
 
-    private void compareExampleTableVersusListOfMaps(String query, ExamplesTable expectations, List<Map<String, Object>> actualData, Boolean strictMatch) {
+    private void compareExampleTableVersusListOfMaps(String query, ExamplesTable expectations, List<Map<String, Object>> actualData, boolean strictMatch) {
         if (strictMatch) {
             assertThat(actualData.size()).as("actual result size does not match expected result size (%d) for query %s", expectations.getRows().size(), query)
                 .isEqualTo(expectations.getRows().size());
@@ -235,35 +286,30 @@ public final class SqlSteps {
         compareExpectedRows(expectations, actualData, strictMatch);
     }
 
-    private void compareExpectedRows(ExamplesTable expectations, List<Map<String, Object>> actualData, Boolean strictMatch) {
+    private void compareExpectedRows(ExamplesTable expectations, List<Map<String, Object>> actualData, boolean strictMatch) {
         if (strictMatch) {
             List<Map<String, String>> expectedData = ExamplesTableUtil.convertTableWithUpperCaseKeys(expectations);
             SoftAssertions softly = new SoftAssertions();
             IntStream.range(0, expectations.getRows().size())
                 .forEach(i -> softly
-                    .assertThatCode(() -> compareExpectedVersusActualMaps(expectedData.get(i), actualData.get(i), softly))
+                    .assertThatCode(() -> compareExpectedVersusActualMaps(expectedData.get(i), actualData.get(i), softly, i))
                     .doesNotThrowAnyException()
                 );
             softly.assertAll();
         } else {
             List<Map<String, String>> expectedData = ExamplesTableUtil.convertTable(expectations);
-            if (!actualData.containsAll(expectedData)) {
-                List<Map<String, String>> notExpectedData = new ArrayList<>(expectedData);
-                List<Map<String, String>> convertedActualData = new ArrayList<>();
+            List<Map<String, String>> foundData = new ArrayList<>();
+            expectedData.forEach(expectedRow ->
+                actualData.stream().filter(actualRow ->
+                    verifyRowsEquality(foundData, expectedRow, actualRow)).findFirst()
+            );
 
-                actualData.forEach(map -> {
-                    Map<String, String> convertedMap = new HashMap<>();
-                    map.forEach((key, value) -> {
-                        String convertedValue = value == null ? null : String.valueOf(value);
-                        convertedMap.put(key, convertedValue);
-                    });
-                    convertedActualData.add(convertedMap);
-                });
+            List<Map<String, String>> notFoundData = new ArrayList<>(expectedData);
+            notFoundData.removeAll(foundData);
 
-                notExpectedData.removeAll(convertedActualData);
-
+            if (!notFoundData.isEmpty()) {
                 StringBuilder foundInDbDataBuilder = getFoundInDatabaseBuilder(actualData);
-                StringBuilder expectedDataBuilder = getExpectedDataBuilder(expectedData, notExpectedData);
+                StringBuilder expectedDataBuilder = getExpectedDataBuilder(expectedData, notFoundData);
 
                 throw new AssertionFailedError("Result set does not contain expected data"
                     + foundInDbDataBuilder.toString()
@@ -272,20 +318,36 @@ public final class SqlSteps {
         }
     }
 
+    private boolean verifyRowsEquality(List<Map<String, String>> foundData, Map<String, String> expectedRow, Map<String, Object> actualRow) {
+        try {
+            expectedRow.entrySet().forEach(entry ->
+                equalsVerifier.verify(actualRow.get(entry.getKey()), entry.getValue())
+            );
+        } catch (AssertionError | IllegalArgumentException e) {
+            return false;
+        }
+        foundData.add(expectedRow);
+        return true;
+    }
+
     private StringBuilder getExpectedDataBuilder(List<Map<String, String>> expectedData, List<Map<String, String>> notExpectedData) {
         StringBuilder expectedDataBuilder = new StringBuilder("\nExpected:\n");
         if (!expectedData.isEmpty()) {
+            List<String> sortedHeaders = expectedData.get(0).keySet().stream()
+                .sorted()
+                .collect(Collectors.toList());
+
             expectedDataBuilder.append("| ");
-            for (String header : expectedData.get(0).keySet()) {
+            for (String header : sortedHeaders) {
                 expectedDataBuilder
                     .append(header)
                     .append(" | ");
             }
             for (Map<String, String> row : expectedData) {
                 expectedDataBuilder.append("\n| ");
-                for (Object value : row.values()) {
+                for (String header : sortedHeaders) {
                     expectedDataBuilder
-                        .append(String.valueOf(value))
+                        .append(row.get(header))
                         .append(" | ");
                 }
                 int index = notExpectedData.indexOf(row);
@@ -300,17 +362,21 @@ public final class SqlSteps {
     private StringBuilder getFoundInDatabaseBuilder(List<Map<String, Object>> actualData) {
         StringBuilder foundInDbDataBuilder = new StringBuilder("\nFound in database:\n");
         if (!actualData.isEmpty()) {
+            List<String> sortedHeaders = actualData.get(0).keySet().stream()
+                .sorted()
+                .collect(Collectors.toList());
+
             foundInDbDataBuilder.append("| ");
-            for (String header : actualData.get(0).keySet()) {
+            for (String header : sortedHeaders) {
                 foundInDbDataBuilder
                     .append(header)
                     .append(" | ");
             }
             for (Map<String, Object> row : actualData) {
                 foundInDbDataBuilder.append("\n| ");
-                for (Object value : row.values()) {
+                for (String header : sortedHeaders) {
                     foundInDbDataBuilder
-                        .append(String.valueOf(value))
+                        .append(row.get(header))
                         .append(" | ");
                 }
             }
@@ -319,12 +385,19 @@ public final class SqlSteps {
     }
 
     @SuppressWarnings("WMI_WRONG_MAP_ITERATOR")
-    private void compareExpectedVersusActualMaps(Map<String, String> expectedRow, Map<String, Object> actualRow, SoftAssertions softly) {
+    private void compareExpectedVersusActualMaps(Map<String, String> expectedRow, Map<String, Object> actualRow, SoftAssertions softly, int i) {
         for (String key : expectedRow.keySet()) {
             softly
                 .assertThatCode(() -> equalsVerifier.verify(actualRow.get(key), expectedRow.get(key)))
+                .as("row [" + i + "], column [" + key + "]")
                 .doesNotThrowAnyException();
         }
+    }
+
+    private LinkedCaseInsensitiveMap<Object> copyResultRow(Map<String, Object> originalRow) {
+        LinkedCaseInsensitiveMap<Object> row = new LinkedCaseInsensitiveMap<>(originalRow.size());
+        row.putAll(originalRow);
+        return row;
     }
 
     @AfterScenario

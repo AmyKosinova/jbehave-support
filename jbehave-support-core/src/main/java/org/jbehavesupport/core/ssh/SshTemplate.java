@@ -11,14 +11,16 @@ import static net.schmizz.sshj.common.IOUtils.readFully;
 import static org.springframework.util.Assert.isTrue;
 import static org.springframework.util.Assert.notNull;
 import static org.springframework.util.StreamUtils.copyToString;
-import static org.springframework.util.StringUtils.isEmpty;
+import static org.springframework.util.StringUtils.hasText;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
+import lombok.Getter;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.channel.direct.Session;
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
@@ -30,10 +32,12 @@ public class SshTemplate {
     private final String timestampFormat;
     private final String getLogBetweenTimestampsCommand;
     private final RollingLogResolver rollingLogResolver;
+    @Getter
+    private final boolean reportable;
     private SSHClient sshClient;
 
     private abstract static class Commands {
-        static final String TIMEZONE = "timedatectl | grep zone | grep -Po '(.*zone: )\\K(\\S+)'";
+        static final String TIMEZONE = "date +%z";
         static final String EPOCH_TIME = "date +%s";
     }
 
@@ -41,15 +45,26 @@ public class SshTemplate {
         static final String CMD_DELIMITER = "; ";
     }
 
+    /**
+     * @deprecated(since = "1.1.0", forRemoval = true)
+     * use {@link #SshTemplate(SshSetting, String, RollingLogResolver, boolean)} instead
+     */
+    @Deprecated
     public SshTemplate(SshSetting sshSetting, String timestampFormat, RollingLogResolver rollingLogResolver) {
-        isTrue(!isEmpty(sshSetting.getLogPath()), "log path must not be null or empty");
-        isTrue(!isEmpty(timestampFormat), "timestamp format must not be null or empty");
+        this(sshSetting, timestampFormat, rollingLogResolver, false);
+    }
+
+    public SshTemplate(SshSetting sshSetting, String timestampFormat, RollingLogResolver rollingLogResolver, boolean reportable) {
+        isTrue(hasText(sshSetting.getLogPath()), "log path must not be null or empty");
+        isTrue(hasText(timestampFormat), "timestamp format must not be null or empty");
 
         this.sshSetting = sshSetting;
         this.timestampFormat = timestampFormat;
         this.rollingLogResolver = rollingLogResolver;
+        this.reportable = reportable;
         try {
-            this.getLogBetweenTimestampsCommand = copyToString(new ClassPathResource("get-log-between-timestamps-template.awk").getInputStream(), defaultCharset());
+            InputStream logCommandStream = new ClassPathResource("get-log-between-timestamps-template.awk").getInputStream();
+            this.getLogBetweenTimestampsCommand = copyToString(logCommandStream, defaultCharset()).trim();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -94,10 +109,10 @@ public class SshTemplate {
     }
 
     private String executeCommand(String cmd) throws IOException {
-        isTrue(!isEmpty(cmd), "cmd must not be null or empty");
+        isTrue(hasText(cmd), "cmd must not be null or empty");
         try (
             Session session = getSshClient().startSession();
-            Session.Command command = session.exec(cmd)
+            Session.Command command = session.exec(cmd.trim())
         ) {
             String result = readFully(command.getInputStream()).toString();
             command.join();

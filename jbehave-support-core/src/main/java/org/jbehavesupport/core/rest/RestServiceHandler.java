@@ -1,42 +1,24 @@
 package org.jbehavesupport.core.rest;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
-import static org.springframework.util.Assert.state;
-
-import java.io.IOException;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
-import javax.annotation.PostConstruct;
-
-import org.jbehavesupport.core.TestContext;
-import org.jbehavesupport.core.internal.ExamplesTableUtil;
-import org.jbehavesupport.core.internal.SkipSslVerificationHttpRequestFactory;
-import org.jbehavesupport.core.internal.verification.VerifierNames;
-import org.jbehavesupport.core.report.extension.RestXmlReporterExtension;
-import org.jbehavesupport.core.verification.Verifier;
-import org.jbehavesupport.core.verification.VerifierResolver;
-
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
+import lombok.extern.slf4j.Slf4j;
+import net.minidev.json.JSONArray;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Triple;
-import org.codehaus.jackson.map.ObjectMapper;
+import org.assertj.core.api.SoftAssertions;
 import org.jbehave.core.model.ExamplesTable;
 import org.jbehave.core.steps.Row;
-import org.jbehavesupport.core.internal.ExampleTableConstraints;
+import org.jbehavesupport.core.TestContext;
+import org.jbehavesupport.core.internal.ExamplesTableUtil;
 import org.jbehavesupport.core.internal.MetadataUtil;
+import org.jbehavesupport.core.internal.SkipSslVerificationHttpRequestFactory;
+import org.jbehavesupport.core.internal.verification.EqualsVerifier;
+import org.jbehavesupport.core.report.extension.RestXmlReporterExtension;
+import org.jbehavesupport.core.verification.Verifier;
+import org.jbehavesupport.core.verification.VerifierResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
@@ -53,6 +35,33 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
+
+import javax.annotation.PostConstruct;
+import java.io.IOException;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import static java.lang.Integer.parseInt;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.jbehavesupport.core.internal.ExampleTableConstraints.ALIAS;
+import static org.jbehavesupport.core.internal.ExampleTableConstraints.DATA;
+import static org.jbehavesupport.core.internal.ExampleTableConstraints.EXPECTED_VALUE;
+import static org.jbehavesupport.core.internal.ExampleTableConstraints.NAME;
+import static org.jbehavesupport.core.internal.ExampleTableConstraints.OPERATOR;
+import static org.jbehavesupport.core.internal.ExampleTableConstraints.VERIFIER;
+import static org.jbehavesupport.core.internal.ExamplesTableUtil.assertDuplicatesInColumns;
+import static org.jbehavesupport.core.internal.ExamplesTableUtil.getValue;
+import static org.springframework.util.Assert.state;
 
 /**
  * This class implements steps for testing REST API and provides customization
@@ -72,6 +81,7 @@ import org.springframework.web.client.RestTemplate;
  *
  * }
  */
+@Slf4j
 public class RestServiceHandler {
 
     private static final String REST_RESPONSE_CODE = "rest_response_code";
@@ -79,10 +89,14 @@ public class RestServiceHandler {
     private static final String REST_RESPONSE_HEADERS = "rest_response_headers";
     private static final String HEADER_START = "@header.";
     private static final String RAW_BODY_KEY = "@body";
-    private static Pattern indexedKeyPattern = Pattern.compile("(.*)\\[(\\d+)\\]");
-    private static Pattern indexedKeyPattern2 = Pattern.compile("^\\[(\\d+)\\]\\.(.*)");
+    private static final String STATUS_HEADER = HEADER_START + "Status";
+    private static final Pattern indexedKeyPattern = Pattern.compile("(.*)\\[(\\d+)\\]");
+    private static final Pattern indexedKeyPattern2 = Pattern.compile("^\\[(\\d+)\\]\\.(.*)");
+    private static final Pattern indexedKeyPattern3 = Pattern.compile("(.*)\\[(\\d*)\\]");
+    private static final String PERIOD_REGEX = "\\.(\\d+)(\\.)?";
+    private static final String JSON_PATH_ROOT = "$";
 
-    private String url;
+    private final String url;
 
     @Autowired
     private TestContext testContext;
@@ -92,6 +106,9 @@ public class RestServiceHandler {
 
     @Autowired
     private VerifierResolver verifierResolver;
+
+    @Autowired
+    private EqualsVerifier equalsVerifier;
 
     protected final RestTemplate template = new RestTemplate();
     protected final RestTemplateConfigurer templateConfigurer = new RestTemplateConfigurer(template);
@@ -113,18 +130,36 @@ public class RestServiceHandler {
         if (restXmlReporterExtension != null) {
             template.getInterceptors().add(restXmlReporterExtension);
         }
+        template.getInterceptors().add(new RestLoggingInterceptor());
+    }
+
+    public void sendCheckedRequest(String urlPath, HttpMethod requestMethod, ExamplesTable data) throws IOException{
+        if (data != null) {
+            assertDuplicatesInColumns(data, NAME);
+        }
+        sendRequest(urlPath, requestMethod, data);
     }
 
     @SuppressWarnings("squid:S1166")
     public void sendRequest(String urlPath, HttpMethod requestMethod, ExamplesTable data) throws IOException {
         URL apiUrl = new URL(this.url + urlPath);
-        HttpEntity requestEntity = createRequestEntity(data);
+        HttpEntity requestEntity = createRequestEntity(convertCollectionNotation(data));
         try {
             ResponseEntity<String> responseEntity = template.exchange(apiUrl.toString(), requestMethod, requestEntity, String.class);
             storeResponse(responseEntity);
         } catch (HttpClientErrorException | HttpServerErrorException e) {
             storeResponse(e);
         }
+    }
+
+    /**
+     * Each response that is meant to be successful must match data
+     *
+     * @return ExamplesTable that will be compared against response in same format
+     * as {@link RestServiceSteps#verifyResponse(java.lang.String, java.lang.String, org.jbehave.core.model.ExamplesTable)}
+     */
+    public ExamplesTable getSuccessResult() {
+        return new ExamplesTable("");
     }
 
     private void storeResponse(final ResponseEntity<String> responseEntity) {
@@ -139,31 +174,29 @@ public class RestServiceHandler {
         testContext.put(REST_RESPONSE_JSON, e.getResponseBodyAsString());
     }
 
-    private HttpEntity createRequestEntity(final ExamplesTable data) throws IOException {
+    private HttpEntity createRequestEntity(ExamplesTable data) throws IOException {
         if (data == null) { //return dummy
             return new HttpEntity<>("", null);
         }
-        List<Triple<String, String, String>> requestDataList = ExamplesTableUtil
-            .convertTriple(data, ExampleTableConstraints.NAME, ExampleTableConstraints.DATA, ExampleTableConstraints.ALIAS);
+        List<Triple<String, Object, String>> requestDataList = ExamplesTableUtil.convertTriple(data, NAME, DATA, ALIAS);
         HttpHeaders headers = createHeaders(requestDataList);
 
-        boolean isRaw = ExamplesTableUtil.tableContains(data, ExampleTableConstraints.NAME, RAW_BODY_KEY::equals);
+        boolean isRaw = ExamplesTableUtil.tableContains(data, NAME, RAW_BODY_KEY::equals);
         if (MediaType.MULTIPART_FORM_DATA.equals(headers.getContentType())) {
             state(!isRaw, "multipart request can not use raw data");
             return createMultipartRequestEntity(requestDataList, headers);
         } else if (isRaw) {
-
             return createRawBodyRequestEntity(requestDataList, headers);
         }
         return createJsonRequestEntity(requestDataList, headers);
     }
 
-    private HttpHeaders createHeaders(List<Triple<String, String, String>> requestDataList) {
+    private HttpHeaders createHeaders(List<Triple<String, Object, String>> requestDataList) {
         HttpHeaders headers = new HttpHeaders();
-        for (Iterator<Triple<String, String, String>> iterator = requestDataList.iterator(); iterator.hasNext(); ) {
-            Triple<String, String, String> line = iterator.next();
+        for (Iterator<Triple<String, Object, String>> iterator = requestDataList.iterator(); iterator.hasNext(); ) {
+            Triple<String, Object, String> line = iterator.next();
             String key = line.getLeft();
-            String value = line.getMiddle();
+            String value = String.valueOf(line.getMiddle());
             handleContextAlias(line.getRight(), value);
 
             if (key.startsWith(HEADER_START)) {
@@ -171,27 +204,27 @@ public class RestServiceHandler {
                 iterator.remove();
             }
         }
-        setHeadersContentTypeIfNull(headers, MediaType.APPLICATION_JSON);
+        setContentTypeIfNull(headers);
         return headers;
     }
 
-    private HttpEntity<String> createRawBodyRequestEntity(final List<Triple<String, String, String>> requestDataList, HttpHeaders headers) {
-        Triple<String, String, String> line = requestDataList.remove(0);
-        String rawBody = line.getMiddle();
+    private HttpEntity<String> createRawBodyRequestEntity(final List<Triple<String, Object, String>> requestDataList, HttpHeaders headers) {
+        Triple<String, Object, String> line = requestDataList.remove(0);
+        String rawBody = String.valueOf(line.getMiddle());
         handleContextAlias(line.getRight(), rawBody);
         if (!requestDataList.isEmpty()) {
-            throw new IllegalStateException("If " + RAW_BODY_KEY + " is present, no other keys except headers is allowed.");
+            throw new IllegalStateException("If " + RAW_BODY_KEY + " is present, no other keys except headers are allowed.");
         }
         return new HttpEntity<>(rawBody, headers);
     }
 
-    private HttpEntity<MultiValueMap<String, Object>> createMultipartRequestEntity(final List<Triple<String, String, String>> requestDataList,
+    private HttpEntity<MultiValueMap<String, Object>> createMultipartRequestEntity(final List<Triple<String, Object, String>> requestDataList,
                                                                                    HttpHeaders headers) {
         MultiValueMap<String, Object> multipartRequest = new LinkedMultiValueMap<>();
 
-        for (Iterator<Triple<String, String, String>> iterator = requestDataList.iterator(); iterator.hasNext(); ) {
-            Triple<String, String, String> line = iterator.next();
-            String value = line.getMiddle();
+        for (Iterator<Triple<String, Object, String>> iterator = requestDataList.iterator(); iterator.hasNext(); ) {
+            Triple<String, Object, String> line = iterator.next();
+            String value = String.valueOf(line.getMiddle());
             handleContextAlias(line.getRight(), value);
             if (testContext.isReferenceKey(value)) {
                 Object data = testContext.get(value);
@@ -208,29 +241,30 @@ public class RestServiceHandler {
         return new HttpEntity<>(multipartRequest, headers);
     }
 
-    private HttpEntity<String> createJsonRequestEntity(final List<Triple<String, String, String>> requestDataList, HttpHeaders headers) throws IOException {
-        Map<String, String> requestEntityMap = new HashMap<>();
+    private HttpEntity<String> createJsonRequestEntity(final List<Triple<String, Object, String>> requestDataList, HttpHeaders headers) throws IOException {
+        Map<String, Object> requestEntityMap = new HashMap<>();
 
-        for (Triple<String, String, String> line : requestDataList) {
-            String value = line.getMiddle();
-            if (testContext.isReferenceKey(value)) {
-                Object data = testContext.get(value);
+        for (Triple<String, Object, String> line : requestDataList) {
+            Object value = line.getMiddle();
+            String stringValue = String.valueOf(value);
+            if (testContext.isReferenceKey(stringValue)) {
+                Object data = testContext.get(stringValue);
                 if (data instanceof Resource) {
                     byte[] bytes = IOUtils.toByteArray(((Resource) data).getInputStream());
-                    value = new String(bytes);
+                    stringValue = new String(bytes);
                 } else if (data instanceof byte[]) {
-                    value = new String((byte[]) data);
+                    stringValue = new String((byte[]) data);
                 }
             }
-            handleContextAlias(line.getRight(), value);
+            handleContextAlias(line.getRight(), stringValue);
             requestEntityMap.put(line.getLeft(), value);
         }
         return new HttpEntity<>(createJsonRequest(requestEntityMap), headers);
     }
 
-    private void setHeadersContentTypeIfNull(HttpHeaders headers, MediaType mediaType) {
+    private void setContentTypeIfNull(HttpHeaders headers) {
         if (headers.getContentType() == null) {
-            headers.setContentType(mediaType);
+            headers.setContentType(MediaType.APPLICATION_JSON);
         }
     }
 
@@ -240,17 +274,17 @@ public class RestServiceHandler {
         }
     }
 
-    private String createJsonRequest(Map<String, String> data) throws IOException {
+    private String createJsonRequest(Map<String, Object> data) throws IOException {
         List<Map<String, Object>> requestListOfMaps = new ArrayList<>();
         boolean isCollection = false;
         List<String> orderedKeys = data.keySet().stream().sorted(new IndexedKeyComparator()).collect(Collectors.toList());
         for (String key : orderedKeys) {
-            Integer index = 0;
-            String stringValue = data.get(key);
+            int index = 0;
+            Object value = data.get(key);
             Matcher matcher = indexedKeyPattern2.matcher(key);
             if (matcher.matches()) {
                 isCollection = true;
-                index = Integer.valueOf(matcher.group(1));
+                index = parseInt(matcher.group(1));
                 key = matcher.group(2);
             }
 
@@ -262,7 +296,7 @@ public class RestServiceHandler {
                 requestListOfMaps.add(index, requestMap);
             }
 
-            addEntryToMap(requestMap, key, stringValue);
+            addEntryToMap(requestMap, key, value);
         }
 
         ObjectMapper mapper = new ObjectMapper();
@@ -272,11 +306,10 @@ public class RestServiceHandler {
         } else if (requestListOfMaps.size() == 1) {
             json = mapper.writeValueAsString(requestListOfMaps.get(0));
         }
-
         return json;
     }
 
-    private class IndexedKeyComparator implements Comparator<String> {
+    private static class IndexedKeyComparator implements Comparator<String> {
         @Override
         public int compare(final String o1, final String o2) {
             Pattern p = Pattern.compile("([^\\[\\]]*)\\[(\\d+)\\](.*)");
@@ -293,8 +326,8 @@ public class RestServiceHandler {
                 if (result != 0) {
                     return result;
                 }
-                int o1Index = Integer.valueOf(o1Matcher.group(grpNumber + 1));
-                int o2Index = Integer.valueOf(o2Matcher.group(grpNumber + 1));
+                int o1Index = parseInt(o1Matcher.group(grpNumber + 1));
+                int o2Index = parseInt(o2Matcher.group(grpNumber + 1));
                 result = o1Index - o2Index;
                 if (result != 0) {
                     return result;
@@ -305,7 +338,7 @@ public class RestServiceHandler {
         }
     }
 
-    private void addEntryToMap(Map<String, Object> requestMap, String key, String value) {
+    private void addEntryToMap(Map<String, Object> requestMap, String key, Object value) {
         requestMap.keySet().forEach(k -> requestMap.put(k, requestMap.get(k)));
         if (key.contains(".")) { // nested element
             String k1 = key.substring(0, key.indexOf('.'));
@@ -314,7 +347,7 @@ public class RestServiceHandler {
             Matcher matcher = indexedKeyPattern.matcher(k1);
             if (matcher.matches()) {
                 k1 = matcher.group(1);
-                index = Integer.valueOf(matcher.group(2));
+                index = parseInt(matcher.group(2));
             }
 
             Map<String, Object> map;
@@ -349,22 +382,24 @@ public class RestServiceHandler {
             } else {
                 requestMap.put(k1, map);
             }
-        } else if (key.matches(".*\\[\\d+\\].*")) { // not nested, collection element
-            Matcher matcher = indexedKeyPattern.matcher(key);
+        } else if (key.matches(".*\\[\\d*].*")) { // not nested, collection element
+            Matcher matcher = indexedKeyPattern3.matcher(key);
             if (matcher.matches()) {
                 String k1 = matcher.group(1);
-                int index = Integer.valueOf(matcher.group(2));
                 List list;
                 if (requestMap.containsKey(k1)) {
                     list = (List) requestMap.get(k1);
                 } else {
                     list = new ArrayList<>();
                 }
-                if (list.size() > index) {
-                    list.set(index, value);
-                } else {
-                    list.add(value);
-                }
+                if (!matcher.group(2).isEmpty()) {
+                    int index = parseInt(matcher.group(2));
+                    if (list.size() > index) {
+                        list.set(index, value);
+                    } else {
+                        list.add(value);
+                    }
+                } // else, puts empty list
                 requestMap.put(k1, list);
             }
         } else {
@@ -373,22 +408,24 @@ public class RestServiceHandler {
     }
 
     public void saveResponse(ExamplesTable mapping) {
-        String response = testContext.get(REST_RESPONSE_JSON).toString();
+        boolean responsePresent = testContext.get(REST_RESPONSE_JSON) != null;
+        String response = responsePresent ? testContext.get(REST_RESPONSE_JSON).toString() : null;
+        DocumentContext jsonContext = responsePresent ? JsonPath.parse(response) : null;
         HttpHeaders headers = testContext.get(REST_RESPONSE_HEADERS);
-        DocumentContext jsonContext = JsonPath.parse(response);
-        Consumer<Map<String, String>> rowConsumer = (row) -> {
-            String propertyName = row.get(ExampleTableConstraints.NAME);
-            String alias = row.get(ExampleTableConstraints.ALIAS);
-            Object val;
-            if (propertyName.startsWith(HEADER_START)) {
-                val = headers.get(propertyName.substring(HEADER_START.length())).get(0);
-            } else {
-                val = jsonContext.read("$." + propertyName);
+
+        Consumer<Map<String, String>> rowConsumer = row -> {
+            String propertyName = row.get(NAME);
+            if (!responsePresent) {
+                assertThat(propertyName.startsWith(HEADER_START) || propertyName.startsWith(RAW_BODY_KEY))
+                    .as("no such parameter %s found, response body is empty", propertyName)
+                    .isTrue();
             }
+            String alias = row.get(ALIAS);
+            Object val = getValueFromJson(propertyName, response, jsonContext, headers);
             testContext.put(alias, val, MetadataUtil.userDefined());
         };
 
-        mapping.getRowsAsParameters()
+        convertCollectionNotation(mapping).getRowsAsParameters()
             .stream()
             .map(Row::values)
             .forEach(rowConsumer);
@@ -401,25 +438,25 @@ public class RestServiceHandler {
     }
 
     private void verifyResponseHeaders(HttpHeaders actualHeaders, ExamplesTable data, String actualResponseMessage) {
-        String usedOperator = data.getHeaders().contains(ExampleTableConstraints.VERIFIER) ? ExampleTableConstraints.VERIFIER : ExampleTableConstraints.OPERATOR;
-        List<Triple<String, String, String>> expectedData = ExamplesTableUtil.convertTriple(data, ExampleTableConstraints.NAME, ExampleTableConstraints.EXPECTED_VALUE, usedOperator);
-        for (Triple<String, String, String> triple : expectedData) {
+        String usedOperator = data.getHeaders().contains(VERIFIER) ? VERIFIER : OPERATOR;
+        List<Triple<String, Object, String>> expectedData = ExamplesTableUtil.convertTriple(data, NAME, EXPECTED_VALUE, usedOperator);
+        for (Triple<String, Object, String> triple : expectedData) {
             String key = triple.getLeft();
-            if (key.startsWith(HEADER_START)) {
+            if (key.startsWith(HEADER_START) && !key.equals(STATUS_HEADER)) {
                 String headerKey = key.substring(HEADER_START.length());
                 String assertionErrorMessage = "Headers don't contain " + headerKey + "\n" + actualResponseMessage;
                 assertThat(actualHeaders.containsKey(headerKey)).as(assertionErrorMessage).isTrue();
 
-                final Verifier verifier = verifierResolver.getVerifierByName(StringUtils.defaultIfEmpty(triple.getRight(), VerifierNames.EQ));
+                final Verifier verifier = verifierResolver.getVerifierByName(triple.getRight(), equalsVerifier);
                 verifier.verify(actualHeaders.get(headerKey).get(0), triple.getMiddle());
             }
         }
     }
 
     private void verifyResponseJson(String response, ExamplesTable expectedDataTable, String actualResponseMessage) {
-        String usedOperator = expectedDataTable.getHeaders().contains(ExampleTableConstraints.VERIFIER) ? ExampleTableConstraints.VERIFIER : ExampleTableConstraints.OPERATOR;
-        List<Triple<String, String, String>> expectedData =
-            ExamplesTableUtil.convertTriple(expectedDataTable, ExampleTableConstraints.NAME, ExampleTableConstraints.EXPECTED_VALUE, usedOperator)
+        String usedOperator = expectedDataTable.getHeaders().contains(VERIFIER) ? VERIFIER : OPERATOR;
+        List<Triple<String, Object, String>> expectedData =
+            ExamplesTableUtil.convertTriple(expectedDataTable, NAME, EXPECTED_VALUE, usedOperator)
                 .stream()
                 .filter(i -> !i.getLeft().startsWith(HEADER_START))
                 .collect(Collectors.toList());
@@ -435,22 +472,46 @@ public class RestServiceHandler {
         verifyResponseStatus(actualResponseStatus, expectedResponseStatus, actualResponseMessage);
     }
 
-    public void verifyResponse(String status, ExamplesTable data) {
+    public void verifyResponse(String expectedStatus, ExamplesTable data) {
+        ExamplesTable convertedData = convertCollectionNotation(data);
         HttpStatus actualResponseStatus = HttpStatus.valueOf((Integer) testContext.get(REST_RESPONSE_CODE));
         HttpHeaders actualHeaders = testContext.get(REST_RESPONSE_HEADERS);
         String actualResponseBody = testContext.get(REST_RESPONSE_JSON).toString();
-        HttpStatus expectedStatus = parseHttpStatus(status);
         String actualResponseMessage = createResponseAssertionErrorMessage(actualResponseStatus, actualHeaders, actualResponseBody);
 
-        verifyResponseStatus(actualResponseStatus, expectedStatus, actualResponseMessage);
-        verifyResponseHeaders(actualHeaders, data, actualResponseMessage);
-        verifyResponseJson(actualResponseBody, data, actualResponseMessage);
+        if (!StringUtils.isEmpty(expectedStatus)) {
+            verifyResponseStatus(actualResponseStatus, parseHttpStatus(expectedStatus), actualResponseMessage);
+        }
+        if (ExamplesTableUtil.tableContains(convertedData, NAME, STATUS_HEADER::equals)) {
+            verifyResponseStatus(actualResponseStatus, parseHttpStatus(getValue(convertedData, NAME, STATUS_HEADER, EXPECTED_VALUE)), actualResponseMessage);
+        }
+
+        verifyResponseHeaders(actualHeaders, convertedData, actualResponseMessage);
+        verifyResponseJson(actualResponseBody, convertedData, actualResponseMessage);
     }
 
-    private HttpStatus parseHttpStatus(final String status) {
+    private ExamplesTable convertCollectionNotation(ExamplesTable data) {
+        if (data != null && !data.getRows().isEmpty()) {
+            List<Map<String, String>> newMapList = data.getRows().stream()
+                .map(this::convertIfNeeded)
+                .collect(Collectors.toList());
+            return data.withRows(newMapList);
+        } else {
+            return ExamplesTable.EMPTY;
+        }
+    }
+
+    private Map<String, String> convertIfNeeded(Map<String, String> map) {
+        String name = map.get(NAME);
+        String newName = name.replaceAll(PERIOD_REGEX, "\\[$1\\]$2");
+        map.put(NAME, newName);
+        return map;
+    }
+
+    private HttpStatus parseHttpStatus(String status) {
         HttpStatus expectedStatus;
         if (status.matches("\\d+")) {
-            expectedStatus = HttpStatus.valueOf(Integer.valueOf(status));
+            expectedStatus = HttpStatus.valueOf(parseInt(status));
         } else {
             expectedStatus = HttpStatus.valueOf(status);
         }
@@ -471,17 +532,42 @@ public class RestServiceHandler {
         return message;
     }
 
-    private void verifyJson(String json, List<Triple<String, String, String>> expectedData, String actualResponseMessage) {
+    private void verifyJson(String json, List<Triple<String, Object, String>> expectedData, String actualResponseMessage) {
         assertThat(json).as(actualResponseMessage).isNotEmpty();
+        SoftAssertions softly = new SoftAssertions();
         DocumentContext jsonContext = JsonPath.parse(json);
-        for (Triple<String, String, String> data : expectedData) {
+        for (Triple<String, Object, String> data : expectedData) {
             String propertyName = data.getLeft();
-            String expectedValue = data.getMiddle();
+            Object expectedValue = data.getMiddle();
 
-            Object actualValue = jsonContext.read("$." + propertyName);
-            verifierResolver.getVerifierByName(StringUtils.isNotEmpty(data.getRight()) ? data.getRight() : VerifierNames.EQ)
-                .verify(actualValue, expectedValue);
+            Object actualValue = getValueFromJson(propertyName, json, jsonContext, null);
+            softly.assertThatCode(
+                () -> verifierResolver.getVerifierByName(data.getRight(), equalsVerifier).verify(actualValue, expectedValue)
+            ).doesNotThrowAnyException();
         }
+        softly.assertAll();
+    }
+
+    private Object getValueFromJson(String propertyName, String json, DocumentContext jsonContext, HttpHeaders headers) {
+        assertThat(propertyName).isNotNull();
+        assertThat(propertyName.startsWith(HEADER_START) && headers == null)
+            .as("parameter name cannot be a header when headers are null").isFalse();
+
+        if (propertyName.equals(RAW_BODY_KEY)) {
+            return json;
+        }
+        if (propertyName.startsWith(HEADER_START) && headers != null) {
+            List<String> headerValues = headers.get(propertyName.substring(HEADER_START.length()));
+            assertThat(headerValues).as("no header {} found", propertyName).isNotNull();
+            return headerValues.get(0);
+        }
+
+        String jsonPath = propertyName.startsWith(JSON_PATH_ROOT) ? propertyName : JSON_PATH_ROOT + '.' + propertyName;
+        Object propertyValue = jsonContext.read(jsonPath);
+        if (propertyValue instanceof JSONArray && ((JSONArray) propertyValue).size() == 1) {
+            return ((JSONArray) propertyValue).get(0);
+        }
+        return propertyValue;
     }
 
     /**

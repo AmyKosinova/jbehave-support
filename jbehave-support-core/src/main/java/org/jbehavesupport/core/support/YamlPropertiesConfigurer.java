@@ -5,13 +5,12 @@ import static java.util.stream.Collectors.toList;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.springframework.beans.BeansException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
@@ -26,6 +25,9 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 
 /**
+ *
+ * @deprecated(since = "1.1.4", forRemoval = true) use {@link YamlPropertySourceFactory} instead
+ *
  * The class {@link YamlPropertiesConfigurer} allows to use YAML files as {@link Environment} properties sources.
  * <p>
  * Example usage in spring configuration:
@@ -36,9 +38,11 @@ import org.springframework.core.io.ResourceLoader;
  * }
  * </pre>
  */
+@Slf4j
 @Getter
 @Setter
 @NoArgsConstructor
+@Deprecated
 public class YamlPropertiesConfigurer implements BeanFactoryPostProcessor, EnvironmentAware, ResourceLoaderAware, PriorityOrdered {
 
     private static final String PROFILE_PLACEHOLDER = "{profile}";
@@ -53,7 +57,8 @@ public class YamlPropertiesConfigurer implements BeanFactoryPostProcessor, Envir
     }
 
     @Override
-    public final void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+    public final void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {
+        log.warn("Using deprecated YamlPropertiesConfigurer, please use YamlPropertySourceFactory instead, more info can be found in: https://embeditcz.github.io/jbehave-support/#/jbehave-support-core/docs/Deprecated");
         requireNonNull(locations);
         requireNonNull(environment);
         requireNonNull(resourceLoader);
@@ -73,10 +78,9 @@ public class YamlPropertiesConfigurer implements BeanFactoryPostProcessor, Envir
 
     private Resource[] resolveResources() {
         return Stream.of(locations)
-            .map(this::resolveLocation)
-            .flatMap(Function.identity())
+            .flatMap(this::resolveLocation)
             .map(location -> resourceLoader.getResource(location))
-            .toArray(size -> new Resource[size]);
+            .toArray(Resource[]::new);
     }
 
     private Stream<String> resolveLocation(String location) {

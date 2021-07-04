@@ -1,5 +1,5 @@
-let nexusAPI = "https://mvnrepository.com/artifact/org.jbehavesupport/jbehave-support-core";
-let nexusJbusLocation = "https://mvnrepository.com/artifact/org.jbehavesupport/jbehave-support";
+let repositoryAPI = "https://mvnrepository.com/artifact/org.jbehavesupport/jbehave-support-core";
+let repositoryJbusLocation = "https://mvnrepository.com/artifact/org.jbehavesupport/jbehave-support";
 
 function indexReady() {
     checkNewVersion();
@@ -16,6 +16,22 @@ function reportReady() {
 
     $('#expand-all-rest-calls').click(function () {
         showHideAllInElement('#rest-calls-body');
+    });
+
+    $('#expand-all-jms-messages').click(function () {
+            showHideAllInElement('#jms-messages-body');
+    });
+
+    $('#expand-all-sql-queries').click(function () {
+        showHideAllInElement('#sql-queries-body');
+    });
+
+    $('#expand-all-splunk-queries').click(function () {
+        showHideAllInElement('#splunk-queries-body');
+    });
+
+    $('#expand-all-step-screenshots').click(function () {
+            showHideAllInElement('#step-screen-shots');
     });
 
     $('#expand-all-shell-logs').click(function () {
@@ -36,6 +52,13 @@ function reportReady() {
         $(this).html(jsonPrettyPrint($(this).text()));
     });
 
+    /* copy to clipboard */
+    $('.btn-copy-clipboard').each(function () {
+        $(this).click(function () {
+            copyToClipboard($(this));
+        });
+    });
+
     display('story1');
     checkNewVersion();
 }
@@ -54,7 +77,7 @@ function filter(status) {
 function checkNewVersion() {
     $.ajax({
         method: "GET",
-        url: nexusAPI,
+        url: repositoryAPI,
         crossDomain: true,
         headers: {
             'Access-Control-Allow-Origin': '*'
@@ -67,7 +90,7 @@ function checkNewVersion() {
                 let currentVersionDiv = $('#currentVersion');
                 currentVersionDiv.removeClass('invisible');
                 currentVersionDiv.empty();
-                currentVersionDiv.append('<a href="' + nexusJbusLocation + '">Newer version available: ' + newestVersion + '</a>');
+                currentVersionDiv.append('<a href="' + repositoryJbusLocation + '">Newer version available: ' + newestVersion + '</a>');
             }
         }
     });
@@ -130,4 +153,24 @@ function display(storyId) {
         $(this).toggle($(this).attr('id') == storyId);
     });
     $('body').attr('data-target', '#' + $('div[id=' + storyId + ']').find('nav').attr('id'));
+}
+
+function copyToClipboard(element) {
+    let copiedElement;
+    let selector = element.attr('data-selector');
+    if (selector.charAt(0) === "#") {
+        copiedElement = $(selector);
+    } else {
+        copiedElement = element.find(selector);
+    }
+
+    /* copy command needs to have the element selected which not all elements support
+    thus we copy the text into temporary textarea which supports the select() operation
+    and after the operation we remove it from the dom tree again */
+    let copyTextArea = document.createElement("textarea");
+    copyTextArea.value = copiedElement.text();
+    document.body.appendChild(copyTextArea);
+    copyTextArea.select();
+    document.execCommand("copy");
+    document.body.removeChild(copyTextArea);
 }

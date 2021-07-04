@@ -1,4 +1,4 @@
-A story is collection of scenarious for testing sql steps
+A story is collection of scenarios for testing sql steps
 
 Narrative:
 In order to test sql steps in jbehave-support-core
@@ -26,6 +26,11 @@ select * from person where first_name = 'James'
 Then these rows match the query result:
 | FIRST_NAME | LAST_NAME |
 | James      | Doe       |
+
+When these columns from the single-row query result are saved:
+| name | contextAlias |
+| id   | john_id      |
+
 Given this update is performed on [TEST]:
 update person set first_name = 'John' where first_name = 'James'
 
@@ -107,7 +112,7 @@ delete from person where first_name = 'null';
 
 Scenario: Query fails with message
 
-Given this query is performed on [TEST]:
+Given this query with expected exception is performed on [TEST]:
 select first_name from person_
 Then query fails and error message contains: Table "PERSON_" not found
 

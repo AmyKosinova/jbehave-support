@@ -1,4 +1,4 @@
-A story is collection of scenarious for testing web services
+A story is collection of scenarios for testing web services
 
 Narrative:
 In order to test ws call implemetation in jbehave-support-core
@@ -13,6 +13,7 @@ Given [NameRequest] data for [TEST]:
 | address.0  | {RANDOM_EMAIL}    |
 | passDate   | {RANDOM_DATE}     |
 | maxResults | {RANDOM_NUMBER:9} |
+| car        | Porsche           |
 When [NameRequest] is sent to [TEST] with success
 Then [NameResponse] values from [TEST] match:
 | name      | expectedValue | verifier |
@@ -68,21 +69,49 @@ Then [NameResponse] values from [TEST] match:
 
 Scenario: Ws scenario to confirm request has valid implementation of abstract class
 Given [NameRequest] data for [TEST]:
-| name           | data        | type                                                         |
-| name           | test        |                                                              |
+| name           | data        | type                                              |
+| name           | test        |                                                   |
 | contact        |             | org.jbehavesupport.core.test.app.oxm.PhoneContact |
-| contact.number | 399 811 477 |                                                              |
+| contact.number | 399 811 477 |                                                   |
 When [NameRequest] is sent to [TEST] with success
 
 Scenario: nested list
 Given [NameRequest] data for [TEST]:
-| name                           | data  |
-| name                           | test  |
-| addressList.addressInfo.0.city | Praha |
-| addressList.addressInfo.0.zip  | 11000 |
-| addressList.addressInfo.1.city | Brno  |
-| addressList.addressInfo.1.zip  | 60200 |
+| name                                | data  |
+| name                                | test  |
+| addressList.addressInfo.0.city      | Praha |
+| addressList.addressInfo.0.zip       | 11000 |
+| addressList.addressInfo.0.details.0 | 00    |
+| addressList.addressInfo.0.details.1 | 01    |
+| addressList.addressInfo.1.city      | Brno  |
+| addressList.addressInfo.1.zip       | 60200 |
+| addressList.addressInfo.1.details.0 | 10    |
+| addressList.addressInfo.1.details.1 | 11    |
 When [NameRequest] is sent to [TEST] with success
+Then [NameResponse] values from [TEST] match:
+| name                 | expectedValue |
+| relatives.0.name     | Sarah         |
+| relatives.0.relation | Daughter      |
+| relatives.1.name     | Kamil         |
+| relatives.1.relation | Son           |
+Given [NameRequest] data for [TEST]:
+| name                                  | data  |
+| name                                  | test  |
+| addressList.addressInfo[0].city       | Praha |
+| addressList.addressInfo[0].zip        | 11000 |
+| addressList.addressInfo[0].details[0] | 00    |
+| addressList.addressInfo[0].details[1] | 01    |
+| addressList.addressInfo[1].city       | Brno  |
+| addressList.addressInfo[1].zip        | 60200 |
+| addressList.addressInfo[1].details[0] | 10    |
+| addressList.addressInfo[1].details[1] | 11    |
+When [NameRequest] is sent to [TEST] with success
+Then [NameResponse] values from [TEST] match:
+| name                  | expectedValue |
+| relatives[0].name     | Sarah         |
+| relatives[0].relation | Daughter      |
+| relatives[1].name     | Kamil         |
+| relatives[1].relation | Son           |
 
 Scenario: jaxbElement
 Given [NameRequest] data for [TEST]:
@@ -119,9 +148,10 @@ Then [NameResponse] values from [TEST] match:
 
 Scenario: complex jaxbElement
 Given [NameRequest] data for [TEST]:
-| name                | data      |
-| name                | complexJB |
-| phoneContact.number | 44        |
+| name                 | data          |
+| name                 | complexJB     |
+| phoneContact.number  | 44            |
+| phoneContact.validTo | {RANDOM_DATE} |
 When [NameRequest] is sent to [TEST] with success
 Then [NameResponse] values from [TEST] match:
 | name         | expectedValue |
@@ -163,3 +193,55 @@ When [NameRequest] is sent to [TEST] with success
 Then [NameResponse] values from [TEST] match:
 | name         | expectedValue |
 | testResponse | Base 64 valid |
+
+Scenario: Using xpaths with WS steps
+
+Given [NameRequest] data for [TEST]:
+| name                                  | data  |
+| name                                  | test  |
+| addressList.addressInfo[0].city       | Praha |
+| addressList.addressInfo[0].zip        | 11000 |
+| addressList.addressInfo[0].details[0] | 00    |
+| addressList.addressInfo[0].details[1] | 01    |
+| addressList.addressInfo[1].city       | Brno  |
+| addressList.addressInfo[1].zip        | 60200 |
+| addressList.addressInfo[1].details[0] | 10    |
+| addressList.addressInfo[1].details[1] | 11    |
+
+When [NameRequest] is sent to [TEST] with success
+
+Then [NameResponse] values from [TEST] match:
+| name                                                                                   | expectedValue | mode            |
+| //relatives[1]/Name                                                                    | Sarah         | whatever        |
+| //relatives[1]/Relation                                                                | Daughter      |                 |
+| //relatives[Name='Kamil']/Name                                                         | Kamil         |                 |
+| //relatives[Name='Kamil']/Relation                                                     | Son           |                 |
+| relatives[1].name                                                                      | Kamil         | not_used        |
+| relatives[1].relation                                                                  | Son           |                 |
+| //relatives[1]/Name                                                                    | Sarah         | false           |
+| //relatives[1]/Relation                                                                | Daughter      | false           |
+| //*["firstName"=local-name()]                                                          | John          | NAMESPACE_AWARE |
+| //*["firstName"=local-name()]["http://jbehavesupport.org/definitions"=namespace-uri()] | John          | NAMESPACE_AWARE |
+
+And [NameResponse] values from [TEST] are saved:
+| name                                                                                   | contextAlias   | mode            |
+| relatives.0.name                                                                       | SARAH          |                 |
+| relatives.0.relation                                                                   | DAUGHTER       |                 |
+| relatives.1.name                                                                       | KAMIL          |                 |
+| relatives.1.relation                                                                   | SON            |                 |
+| firstName                                                                              | JOHN           |                 |
+| //relatives[1]/Name                                                                    | SARAH_XPATH    |                 |
+| //relatives[1]/Relation                                                                | DAUGHTER_XPATH |                 |
+| //relatives[Name='Kamil']/Name                                                         | KAMIL_XPATH    |                 |
+| //relatives[Name='Kamil']/Relation                                                     | SON_XPATH      |                 |
+| //*["firstName"=local-name()]                                                          | JOHN_XPATH     | NAMESPACE_AWARE |
+| //*["firstName"=local-name()]["http://jbehavesupport.org/definitions"=namespace-uri()] | JOHN_XPATH_NS  | NAMESPACE_AWARE |
+
+Then following data are compared:
+| data          | expectedValue       | verifier  |
+| {CP:SARAH}    | {CP:SARAH_XPATH}    | EQ        |
+| {CP:DAUGHTER} | {CP:DAUGHTER_XPATH} | EQ        |
+| {CP:KAMIL}    | {CP:KAMIL_XPATH}    | EQ        |
+| {CP:SON}      | {CP:SON_XPATH}      | EQ        |
+| {CP:JOHN}     | {CP:JOHN_XPATH}     | EQ        |
+| {CP:JOHN}     | {CP:JOHN_XPATH_NS}  | EQ        |

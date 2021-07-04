@@ -1,5 +1,7 @@
 package org.jbehavesupport.core.test.app;
 
+import static java.util.stream.Collectors.toMap;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -7,15 +9,16 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import javax.annotation.PostConstruct;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.Part;
 
+import org.jbehavesupport.core.test.app.domain.Mirror;
+import org.jbehavesupport.core.test.app.domain.Mirror.Header;
 import org.jbehavesupport.core.test.app.domain.User;
-
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,8 +39,8 @@ public class UserController {
 
     @PostConstruct
     public void postConstruct() {
-        users.put(Long.valueOf(5), User.builder().id(Long.valueOf(5)).firstName("Emanuel").lastName("Rego").build());
-        users.put(Long.valueOf(9), User.builder().id(Long.valueOf(9)).firstName("Alison").lastName("Cerutti").build());
+        users.put(5L, User.builder().id(5L).firstName("Emanuel").lastName("Rego").build());
+        users.put(9L, User.builder().id(9L).firstName("Alison").lastName("Cerutti").build());
     }
 
     @PatchMapping("/init/")
@@ -109,12 +112,21 @@ public class UserController {
             Map<String, String> response = request.getParts().stream()
                 .sorted(Comparator.comparing(Part::getName))
                 .map(Part::getName)
-                .collect(Collectors.toMap(String::toString, String::toString));
+                .collect(toMap(String::toString, String::toString));
             return new ResponseEntity(response, HttpStatus.OK);
         } else {
             return new ResponseEntity("valid multipart part was expected", HttpStatus.BAD_REQUEST);
         }
     }
 
-
+    @PostMapping("/mirror/")
+    public ResponseEntity<Mirror> mirror(@RequestBody Mirror mirror) {
+        return (ResponseEntity<Mirror>) new ResponseEntity(mirror,
+            mirror.getHeaders().stream().collect(
+                toMap(Header::getKey, h -> Collections.singletonList(h.getValue()), (a, b) -> {
+                    a.addAll(b);
+                    return a;
+                }, HttpHeaders::new)),
+            HttpStatus.valueOf(mirror.getHttpStatus()));
+    }
 }

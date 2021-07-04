@@ -14,7 +14,7 @@ import static groovy.test.GroovyAssert.shouldFail
 class HealthCheckStepsTest extends Specification {
 
     @Autowired
-    HealthCheckSteps healthCheckSteps;
+    HealthCheckSteps healthCheckSteps
 
     def "CheckComponentsAreHealthy"() {
 
@@ -51,6 +51,6 @@ class HealthCheckStepsTest extends Specification {
         }
 
         then:
-        fail.getMessage().equals("HealthCheckSteps requires single HealthCheck bean with qualifier [MISS]")
+        fail.getMessage() == "HealthCheckSteps requires single HealthCheck bean with qualifier [MISS]"
     }
 }

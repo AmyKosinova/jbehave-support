@@ -2,20 +2,20 @@ package org.jbehavesupport.core.ws;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
-import java.security.cert.CertificateException;
+import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.function.Supplier;
 
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import javax.xml.XMLConstants;
 import javax.xml.transform.TransformerFactory;
 
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.commons.lang3.ArrayUtils;
 import org.springframework.oxm.jaxb.Jaxb2Marshaller;
-import org.springframework.ws.client.WebServiceClientException;
 import org.springframework.ws.client.core.WebServiceTemplate;
 import org.springframework.ws.client.support.interceptor.ClientInterceptor;
 import org.springframework.ws.client.support.interceptor.ClientInterceptorAdapter;
@@ -80,10 +80,12 @@ public class WebServiceTemplateConfigurer {
     public final WebServiceTemplateConfigurer header(Supplier<String> headerProvider) {
         ClientInterceptor headerInterceptor = new ClientInterceptorAdapter() {
             @Override
-            public boolean handleRequest(MessageContext msg) throws WebServiceClientException {
+            public boolean handleRequest(MessageContext msg) {
                 try {
-                    TransformerFactory.newInstance()
-                        .newTransformer()
+                    TransformerFactory transformerFactory = TransformerFactory.newInstance();
+                    transformerFactory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+                    transformerFactory.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+                    transformerFactory.newTransformer()
                         .transform(new StringSource(headerProvider.get()), ((SoapMessage) msg.getRequest()).getSoapHeader().getResult());
                 } catch (Exception e) {
                     throw new RuntimeException(e);
@@ -122,7 +124,7 @@ public class WebServiceTemplateConfigurer {
             sb.append(getUsername());
             sb.append(':');
             sb.append(getPassword());
-            return Base64.getEncoder().encodeToString(sb.toString().getBytes("US-ASCII"));
+            return Base64.getEncoder().encodeToString(sb.toString().getBytes(StandardCharsets.US_ASCII));
         }
 
         @Override
@@ -135,14 +137,16 @@ public class WebServiceTemplateConfigurer {
 
     private static class DummyX509TrustManager implements X509TrustManager {
 
-        public void checkClientTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
+        public void checkClientTrusted(X509Certificate[] chain, String authType) {
+            // noop
         }
 
-        public void checkServerTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
+        public void checkServerTrusted(X509Certificate[] chain, String authType) {
+            // noop
         }
 
         public X509Certificate[] getAcceptedIssuers() {
-            return null;
+            return new X509Certificate[0];
         }
 
     }

@@ -71,6 +71,7 @@ class CommandHelperTest extends Specification {
         "keep:0:'A:B:C:D'"                || ["0", "A:B:C:D"]
         "keep:0:'A:B:C:D':1"              || ["0", "A:B:C:D", "1"]
         "keep:0:'A:B:C:D':1:2"            || ["0", "A:B:C:D", "1", "2"]
+        "do_not_keep:\\'0:1\\'"           || ["\\'0", "1\\'"]
 
         "keep_more:'A':'B'"               || ["A", "B"]
         "keep_more:'A:B':C"               || ["A:B", "C"]
@@ -88,5 +89,21 @@ class CommandHelperTest extends Specification {
         "empty::A:"                       || ["", "A"]
         "empty:A:"                        || ["A"]
         "empty:A::"                       || ["A"]
+    }
+
+    @Unroll
+    def "Test wrong params for checkNumericParams: #params"() {
+        when:
+        CommandHelper.checkNumericParams(*params)
+
+        then:
+        Exception exception = thrown()
+        expected == exception.class
+        message == exception.message
+
+        where:
+        params       || expected                       || message
+        ["a", "1"]   || IllegalArgumentException.class || "String parameter must be numeric: a"
+        ["1,1", "1"] || IllegalArgumentException.class || "String parameter must be numeric: 1,1"
     }
 }

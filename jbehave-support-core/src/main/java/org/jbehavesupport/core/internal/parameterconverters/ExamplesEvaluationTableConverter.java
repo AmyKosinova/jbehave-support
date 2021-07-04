@@ -1,26 +1,27 @@
 package org.jbehavesupport.core.internal.parameterconverters;
 
 import java.lang.reflect.Type;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import lombok.RequiredArgsConstructor;
 import org.jbehavesupport.core.expression.ExpressionEvaluator;
 
 import org.jbehave.core.configuration.Configuration;
 import org.jbehave.core.model.ExamplesTable;
 import org.jbehave.core.model.ExamplesTableFactory;
 import org.jbehave.core.steps.ParameterConverters;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
-public class ExamplesEvaluationTableConverter implements ParameterConverters.ParameterConverter {
+@RequiredArgsConstructor
+public class ExamplesEvaluationTableConverter implements ParameterConverters.ParameterConverter<ExamplesTable> {
+
+    private final ExpressionEvaluator expressionEvaluator;
 
     private ExamplesTableFactory factory;
-
-    @Autowired
-    private ExpressionEvaluator expressionEvaluator;
 
     public void setConfiguration(Configuration config) {
         this.factory = new ExamplesTableFactory(config);
@@ -35,7 +36,7 @@ public class ExamplesEvaluationTableConverter implements ParameterConverters.Par
     }
 
     @Override
-    public Object convertValue(final String value, final Type type) {
+    public ExamplesTable convertValue(final String value, final Type type) {
         ExamplesTable result = factory.createExamplesTable(value.trim());
         return result.withRows(evaluateRows(result.getRows()));
     }
@@ -46,6 +47,15 @@ public class ExamplesEvaluationTableConverter implements ParameterConverters.Par
 
     private Map<String, String> translateRow(Map<String, String> row) {
         return row.entrySet().stream()
-            .collect(Collectors.toMap(Map.Entry::getKey, e -> expressionEvaluator.evaluate(e.getValue()).toString()));
+            .collect(
+                Collectors.toMap(
+                    Map.Entry::getKey,
+                    e -> expressionEvaluator.evaluate(e.getValue()).toString(),
+                    (u, v) -> {
+                        throw new IllegalStateException(String.format("Duplicate key %s", u));
+                    },
+                    LinkedHashMap::new
+                )
+            );
     }
 }

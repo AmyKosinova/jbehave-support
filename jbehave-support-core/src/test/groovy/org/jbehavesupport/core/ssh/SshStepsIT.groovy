@@ -12,10 +12,10 @@ import java.time.ZonedDateTime
 class SshStepsIT extends Specification {
 
     @Autowired
-    SshSteps sshSteps;
+    SshSteps sshSteps
 
     @Autowired
-    TestContext testContext;
+    TestContext testContext
 
     def "test soft assertions in logContainsData"() {
         given:
@@ -30,7 +30,7 @@ class SshStepsIT extends Specification {
         sshSteps.logContainsData("TEST", "START_TIME", table)
 
         then:
-        def throwable = thrown(AssertionError)
-        throwable.getMessage().contains("The following 2 assertions failed")
+        def exception = thrown(AssertionError)
+        exception.getMessage().contains("Multiple Failures (2 failures)")
     }
 }

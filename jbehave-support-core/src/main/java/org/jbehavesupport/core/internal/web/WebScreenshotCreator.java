@@ -1,5 +1,18 @@
 package org.jbehavesupport.core.internal.web;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.codehaus.plexus.util.FileUtils;
+import org.openqa.selenium.NoAlertPresentException;
+import org.jbehavesupport.core.TestContext;
+import org.jbehavesupport.core.internal.FileNameResolver;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
+import org.openqa.selenium.WebDriver;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import org.jbehavesupport.core.web.WebScreenshotType;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -8,74 +21,79 @@ import java.nio.file.Paths;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-import org.jbehavesupport.core.TestContext;
-import org.jbehavesupport.core.internal.web.webdriver.WebDriverDelegate;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.codehaus.plexus.util.FileUtils;
-import org.jbehavesupport.core.AbstractSpringStories;
-import org.openqa.selenium.OutputType;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class WebScreenshotCreator {
 
-    public static final String SCREENSHOTS_KEY = "error_screenshots";
-    private static final String FILE_NAME_PATTERN = "FAILED_%s.png";
+    public static final String FAILED_SCREENSHOTS_KEY = "error_screenshots";
+    public static final String REPORT_SCREENSHOTS_KEY = "report_screenshots";
+    private static final String FILE_NAME_PATTERN = "%s_%s.png";
+    public static final String SCREENSHOTS_DIRECTORY_KEY = "screenshotDirectory";
 
     @Value("${web.screenshot.directory:./target/reports}")
     private String screenshotDirectory;
 
-    private final WebDriverDelegate driver;
+    private final WebDriver driver;
     private final TestContext testContext;
+    private final FileNameResolver fileNameResolver;
 
-    public final void createScreenshot() {
-        try {
-            if (driver.isInitialized()) {
-                log.info("Taking error screenshot will place it in {}", screenshotDirectory);
-                prepareDirectory();
-
-                File screenshot = driver.getScreenshotAs(OutputType.FILE);
-                File destinationFile = getDestinationFile();
-                FileUtils.copyFile(screenshot, destinationFile);
-
-                storeInTestContext(destinationFile.getName());
+    public void createScreenshot(WebScreenshotType screenShotType) {
+        if (isAlertPresent()) {
+            log.warn("Can't take screenshot (alert is present)");
+        } else {
+            try {
+                if (driver instanceof TakesScreenshot) {
+                    takesScreenshot(screenShotType);
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
             }
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+        }
+    }
+
+    private boolean isAlertPresent() {
+        try {
+            if (driver.switchTo() != null) {
+                driver.switchTo().alert();
+                return true;
+            }
+        } catch (NoAlertPresentException x) {
+            // no op
+        }
+        return false;
+    }
+
+    private void takesScreenshot(WebScreenshotType screenShotType) throws IOException {
+        log.info("Taking {} screenshot will place it in {}", screenShotType, screenshotDirectory);
+        File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+
+        if (screenshot == null && screenShotType != WebScreenshotType.FAILED) {
+            throw new IllegalStateException("Creation of screenshot failed");
+        } else if (screenshot != null) {
+            prepareDirectory();
+            File destinationFile = fileNameResolver.resolveFilePath(FILE_NAME_PATTERN, screenshotDirectory, screenShotType.toString()).toFile();
+            FileUtils.copyFile(screenshot, destinationFile);
+
+            if (screenShotType == WebScreenshotType.FAILED) {
+                storeInTestContext(destinationFile.getName(), FAILED_SCREENSHOTS_KEY);
+            } else {
+                storeInTestContext(destinationFile.getName(), REPORT_SCREENSHOTS_KEY);
+            }
         }
     }
 
     private void prepareDirectory() throws IOException {
+        testContext.put(SCREENSHOTS_DIRECTORY_KEY, screenshotDirectory);
         if (!Paths.get(screenshotDirectory).toFile().exists()) {
             Files.createDirectory(Paths.get(screenshotDirectory));
-            testContext.put("screenshotDirectory", screenshotDirectory);
         }
     }
 
-    private File getDestinationFile() {
-        if (testContext.contains(AbstractSpringStories.JBEHAVE_SCENARIO)) {
-            final String storyName = testContext.get(AbstractSpringStories.JBEHAVE_SCENARIO, String.class).split("#")[0];
-            File destinationFile = new File(screenshotDirectory, String.format(FILE_NAME_PATTERN, storyName));
-            int i = 1;
-            while (destinationFile.exists()) {
-                destinationFile = new File(screenshotDirectory, String.format(FILE_NAME_PATTERN, storyName + "-" + i++));
-            }
-            return destinationFile;
-        } else {
-            return new File("screenshot-" + System.currentTimeMillis() + ".png");
+    private void storeInTestContext(final String destFile, String screenshotKey) {
+        if (!testContext.contains(screenshotKey)) {
+            testContext.put(screenshotKey, new LinkedHashSet<String>());
         }
+        testContext.get(screenshotKey, Set.class).add(destFile);
     }
-
-    private void storeInTestContext(final String destFile) {
-        if (!testContext.contains(SCREENSHOTS_KEY)) {
-            testContext.put(SCREENSHOTS_KEY, new LinkedHashSet<String>());
-        }
-        testContext.get(SCREENSHOTS_KEY, Set.class).add(destFile);
-    }
-
 }

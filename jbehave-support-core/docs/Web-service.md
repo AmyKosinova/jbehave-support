@@ -18,7 +18,7 @@ The next step sends the request to a ws api and verifies the result code is SUCC
 When [ClientRequest] is sent to [MYAPP] with success
 ```
 
-When it's necessary te verify a non-success response code (for example ERROR_CLIENT_NOT_FOUND) the following steps should be used.
+When it's necessary to verify a non-success response code (for example ERROR_CLIENT_NOT_FOUND) the following steps should be used.
 
 ```
 When [ClientRequest] is sent to [MYAPP]
@@ -32,9 +32,9 @@ The next step will verify the response received from the called system - MYAPP i
 
 ```
 Then [ClientRequest] values from [MYAPP] match:
-| name                             | expectedValue        |
-| client.id                        | {NOT_NULL}           |
-| client.version                   | {NOT_NULL}           |
+| name           | expectedValue | verifier |
+| client.id      | {NULL}        | NE       |
+| client.version | {NULL}        | NE       |
 ```
 
 The following step will save the specified values from the response to test context.
@@ -45,6 +45,37 @@ Given [ClientRequest] values from [MYAPP] are saved:
 | client.id | ID           |
 ```
 Any prefix (`Given`/`When`/`Then`) can be used for this step.
+
+To verify standard SOAP Fault response the step below can be used:
+
+```
+When [ClientRequest] is sent to [MYAPP] with fault:
+| name        | expectedValue |
+| faultCode   | Server        |
+| faultReason | someReason    |
+```
+Note the special `faultCode` and `faultReason` parameters that can be checked (either one of them or both can be checked).
+
+### Sending NIL values
+A special `NIL` command can be used for sending nil values:
+> ``` 
+> [$request] data for [$application]:  
+> | name        | data  |  
+> | Foo.validTo | {NIL} |
+> ```
+The above will result in something like `<Foo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><validTo xsi:nil="true"/></Foo>`.
+
+### Sending Empty values
+An empty node (`<node/>`) can be sent by se setting the required node using the `NULL` command:
+> ``` 
+> [$request] data for [$application]:  
+> | name        | data   |  
+> | Foo.validTo | {NULL} |
+> ```
+The above will result in something like `<Foo><validTo/></Foo>`.
+
+When using the `NULL` command the node gets sent with empty value, when not specifying any value at all (not specifying the key in the table) the node does not get sent at all.
+
 
 ---
 ### Custom type converters
@@ -57,7 +88,7 @@ To handle your own conversion you need to:
 Code example of tutorial above can look like this:
 ```
 @Bean
-public ConversionService conversionService(){
+public ConversionService conversionService() {
     ConversionService conversionService = new DefaultConversionService();
     ((DefaultConversionService)conversionService).addConverter(new Converter<String, DateTime>() {
         @Override
@@ -78,4 +109,32 @@ Given [CreateAccountRequest] data for [MYAPP]:
 | name                                   | data | type                                       |
 | contract.contractParameters            |      | org.myapp.oxm.CurrentContractParametersDto |
 | contract.contractParameters.billingDay | 7    |                                            |
+```
+
+### Using XPaths in validation/saving response
+Please note that xpath solution is using DOM files, so it is not suitable for extra large documents<br>
+In case more flexible way to save or validate response is needed, XPaths can be used. To use it simply start the value in the `name` column with `/`.
+This solution doesn't use namespaces
+```
+Then [NameResponse] values from [TEST] match:
+| name                               | expectedValue |
+| //relatives[1]/Name                | Sarah         |
+| //relatives[1]/Relation            | Daughter      |
+| //relatives[Name='Kamil']/Name     | Kamil         |
+| //relatives[Name='Kamil']/Relation | Son           |
+```
+If using namespaces for XPaths is needed, use `mode` column with `NAMESPACE_AWARE` value
+```
+And [NameResponse] values from [TEST] are saved:
+| name                                                                                   | contextAlias   | mode            |
+| //*["firstName"=local-name()]                                                          | JOHN_XPATH     | NAMESPACE_AWARE |
+| //*["firstName"=local-name()]["http://jbehavesupport.org/definitions"=namespace-uri()] | JOHN_XPATH_NS  | NAMESPACE_AWARE |
+```
+
+#### Enable WS message logging from WS steps
+To enable logging of WS messages add spring `MessageTracing` into logback
+```
+<logger name="org.springframework.ws.client.MessageTracing" level="trace" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+</logger>
 ```

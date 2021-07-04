@@ -3,16 +3,21 @@ package org.jbehavesupport.core.report;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import javax.annotation.PreDestroy;
+import javax.xml.XMLConstants;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
@@ -48,7 +53,7 @@ import org.xml.sax.SAXException;
 
 import static java.lang.String.format;
 import static java.util.Objects.nonNull;
-import static org.apache.commons.lang3.StringEscapeUtils.escapeXml10;
+import static org.apache.commons.text.StringEscapeUtils.escapeXml10;
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 
 @Slf4j
@@ -68,7 +73,7 @@ public class XmlReporterFactory extends Format {
     @Value("${report.template:report.xslt}")
     private Resource reportTemplate;
 
-    @Value("#{'${report.additionalResources:functions.js}'.split(',')}")
+    @Value("#{'${report.additionalResources:functions.js, report-generator}'.split(',')}")
     private List<Resource> additionalResources;
 
     @Value("${report.directory:reports}")
@@ -155,19 +160,58 @@ public class XmlReporterFactory extends Format {
     }
 
     private void copyResourceToReportDirectory(Resource resource, String targetFilePath) {
-        File targetFile = new File(targetFilePath);
         try {
-            FileUtils.copyInputStreamToFile(resource.getInputStream(), targetFile);
+            String resourcePath = String.valueOf(resource.getURI());
+            String jarPath = resourcePath.replace(("!/" + resource.getFilename()), "").replace("jar:file:", "");
+            File jarFile = new File(jarPath);
+
+            if (jarFile.isFile()) {
+                copyResourceFromJar(resource, targetFilePath, jarFile);
+            } else {
+                copyResourceFromFile(resource, targetFilePath);
+            }
         } catch (IOException e) {
-            log.error("Cannot copy resource file to target", e);
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private void copyResourceFromFile(Resource resource, String targetFilePath) throws IOException {
+        File targetFile = new File(targetFilePath);
+        if (resource.isFile() && resource.getFile().isDirectory()) {
+            FileUtils.copyDirectory(resource.getFile(), targetFile);
+        } else {
+            FileUtils.copyInputStreamToFile(resource.getInputStream(), targetFile);
+        }
+    }
+
+    private void copyResourceFromJar(Resource resource, String targetFilePath, File jarFile) throws IOException {
+        try (JarFile jar = new JarFile(jarFile)) {
+            JarEntry entry = jar.getJarEntry(resource.getFilename());
+            if (entry.isDirectory()) {
+                Enumeration<JarEntry> entryEnumeration = jar.entries();
+                while (entryEnumeration.hasMoreElements()) {
+                    JarEntry file = entryEnumeration.nextElement();
+                    if (file.getName().startsWith(entry.getName()) && file.getName().endsWith(".xslt")) {
+                        String fileName = file.getName().replace(entry.getName(), "");
+                        File newFile = new File(targetFilePath + File.separator + fileName);
+                        try {
+                            FileUtils.copyInputStreamToFile(jar.getInputStream(file), newFile);
+                        } catch (IOException e) {
+                            log.error("Unable to get input stream for this file {}", targetFilePath + File.separator + fileName);
+                            throw new UncheckedIOException(e);
+                        }
+                    }
+                }
+            } else {
+                File targetFile = new File(targetFilePath);
+                FileUtils.copyInputStreamToFile(jar.getInputStream(entry), targetFile);
+            }
         }
     }
 
     private IndexItem parseFile(File file) {
         try {
-            DocumentBuilderFactory domFactory = DocumentBuilderFactory.newInstance();
-            DocumentBuilder builder = domFactory.newDocumentBuilder();
-            Document doc = builder.parse(file);
+            Document doc = getDocument(file);
 
             // XPath Query for showing all nodes value
             return IndexItem.builder()
@@ -182,11 +226,9 @@ public class XmlReporterFactory extends Format {
         return null;
     }
 
-    private void addContainerMetadata(IndexContainer indexContainer, final File file) {
+    private void addContainerMetadata(IndexContainer indexContainer, File file) {
         try {
-            DocumentBuilderFactory domFactory = DocumentBuilderFactory.newInstance();
-            DocumentBuilder builder = domFactory.newDocumentBuilder();
-            Document doc = builder.parse(file);
+            Document doc = getDocument(file);
 
             int i = 1;
             while (true) {
@@ -202,6 +244,14 @@ public class XmlReporterFactory extends Format {
         } catch (ParserConfigurationException | SAXException | IOException | XPathExpressionException e) {
             log.error("Error in parsing xml report", e);
         }
+    }
+
+    private Document getDocument(File file) throws ParserConfigurationException, SAXException, IOException {
+        DocumentBuilderFactory domFactory = DocumentBuilderFactory.newInstance();
+        domFactory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        domFactory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        DocumentBuilder builder = domFactory.newDocumentBuilder();
+        return builder.parse(file);
     }
 
     private String getValue(Document doc, String path) throws XPathExpressionException {

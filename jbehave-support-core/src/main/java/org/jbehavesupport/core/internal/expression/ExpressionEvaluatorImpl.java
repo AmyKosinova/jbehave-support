@@ -2,22 +2,21 @@ package org.jbehavesupport.core.internal.expression;
 
 import static org.jbehavesupport.core.support.TestContextUtil.unescape;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.text.WordUtils;
 import org.jbehavesupport.core.expression.ExpressionCommand;
 import org.jbehavesupport.core.expression.ExpressionEvaluator;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.text.WordUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
+import org.jbehavesupport.core.support.TestContextUtil;
 
 @Slf4j
-@Component
 public class ExpressionEvaluatorImpl implements ExpressionEvaluator {
     //
     private static final Pattern EXPRESSION = Pattern.compile("(.*)(?<!\\\\)\\{(([^\\{\\}]|\\\\\\{|\\\\\\})*)(?<!\\\\)\\}(.*)", Pattern.DOTALL);
@@ -25,10 +24,10 @@ public class ExpressionEvaluatorImpl implements ExpressionEvaluator {
     private final Map<String, String> aliases;
     private final Map<String, String> shorthands;
 
-    @Autowired
     private Map<String, ExpressionCommand> commands;
 
-    public ExpressionEvaluatorImpl() {
+    public ExpressionEvaluatorImpl(Map<String, ExpressionCommand> commands) {
+        this.commands = commands;
         aliases = new HashMap<>();
         shorthands = new HashMap<>();
         shorthands.put("CP", "TEST_CONTEXT_COPY");
@@ -59,7 +58,7 @@ public class ExpressionEvaluatorImpl implements ExpressionEvaluator {
                     returnValue = valObj;
                 }
             } else {
-                returnValue = null;
+                returnValue = "";
             }
             m = EXPRESSION.matcher(returnValue.toString());
         }
@@ -85,7 +84,10 @@ public class ExpressionEvaluatorImpl implements ExpressionEvaluator {
             throw new IllegalStateException("Unable to evaluate: '" + expression + "'. Check command: " + commandName);
         }
 
-        return evaluationCommand.execute(commandParams);
+        String[] unescapedParams = Arrays.stream(commandParams)
+            .map(TestContextUtil::unescape)
+            .toArray(String[]::new);
+        return TestContextUtil.escape(evaluationCommand.execute(unescapedParams));
     }
 
     private String resolveBeanName(String commandName) {

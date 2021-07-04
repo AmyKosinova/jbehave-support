@@ -1,35 +1,54 @@
 package org.jbehavesupport.core.ws;
 
-import static org.jbehavesupport.core.support.TestContextUtil.putDataIntoContext;
-import static org.junit.Assert.assertNotNull;
-import static org.springframework.util.Assert.isTrue;
-import static org.springframework.util.Assert.state;
-
-import java.util.Map;
-import java.util.function.Consumer;
-
-import javax.annotation.PostConstruct;
-
-import org.jbehavesupport.core.TestContext;
-import org.jbehavesupport.core.internal.verification.VerifierNames;
-import org.jbehavesupport.core.support.RequestFactory;
-import org.jbehavesupport.core.verification.Verifier;
-import org.jbehavesupport.core.verification.VerifierResolver;
-
 import lombok.Data;
+import lombok.SneakyThrows;
 import org.jbehave.core.model.ExamplesTable;
+import org.jbehave.core.steps.ConvertedParameters;
 import org.jbehave.core.steps.Parameters;
 import org.jbehave.core.steps.Row;
+import org.jbehavesupport.core.TestContext;
 import org.jbehavesupport.core.internal.ExampleTableConstraints;
 import org.jbehavesupport.core.internal.MetadataUtil;
 import org.jbehavesupport.core.internal.ReflectionUtils;
+import org.jbehavesupport.core.internal.verification.EqualsVerifier;
+import org.jbehavesupport.core.support.RequestFactory;
 import org.jbehavesupport.core.support.TestContextUtil;
+import org.jbehavesupport.core.verification.Verifier;
+import org.jbehavesupport.core.verification.VerifierResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.ws.FaultAwareWebServiceMessage;
 import org.springframework.ws.client.core.FaultMessageResolver;
 import org.springframework.ws.client.core.WebServiceTemplate;
 import org.springframework.ws.client.support.interceptor.ClientInterceptor;
+
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
+import javax.annotation.PostConstruct;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpressionException;
+import javax.xml.xpath.XPathFactory;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+
+import static org.jbehavesupport.core.internal.ExampleTableConstraints.NAME;
+import static org.jbehavesupport.core.internal.ExamplesTableUtil.assertDuplicatesInColumns;
+import static org.junit.Assert.assertNotNull;
+import static org.springframework.util.Assert.isTrue;
+import static org.springframework.util.Assert.state;
 
 /**
  * This class implements steps for testing web services and provides customization
@@ -56,10 +75,14 @@ import org.springframework.ws.client.support.interceptor.ClientInterceptor;
  * }
  * </pre>
  */
+
 public abstract class WebServiceHandler {
 
     private static final String CONTEXT_SEPARATOR = ".";
     private static final String REQUEST_POSTFIX = "Request";
+    public static final String BRACKET_REGEX = "(.*)\\[(\\d+)\\](.*)";
+    private static final String SLASH_PREFIX = "/";
+    public static final String NAMESPACE_AWARE = "NAMESPACE_AWARE";
 
     @Autowired
     protected TestContext testContext;
@@ -72,6 +95,9 @@ public abstract class WebServiceHandler {
 
     @Autowired
     private VerifierResolver verifierResolver;
+
+    @Autowired
+    private EqualsVerifier equalsVerifier;
 
     protected final WebServiceTemplate template = new WebServiceTemplate();
     protected final WebServiceTemplateConfigurer templateConfigurer = new WebServiceTemplateConfigurer(template);
@@ -91,12 +117,28 @@ public abstract class WebServiceHandler {
 
     public final void setRequestData(String request, ExamplesTable data) {
         testContext.clear(key -> key.startsWith(request));
-        overrideRequestData(request, data);
+        ExamplesTable convertedData = convertCollectionNotation(data);
+        assertDuplicatesInColumns(data, NAME);
+        overrideRequestData(request, convertedData);
     }
 
     public final void overrideRequestData(String request, ExamplesTable data) {
         endpointRegistry.validateRequest(request);
         TestContextUtil.putDataIntoContext(testContext, data, request);
+    }
+
+    private ExamplesTable convertCollectionNotation(ExamplesTable data) {
+        List<Map<String, String>> newMapList = data.getRows().stream()
+            .map(map -> {
+                String name = map.get(ExampleTableConstraints.NAME);
+                if (name.matches(BRACKET_REGEX) && !name.startsWith(SLASH_PREFIX)) {
+                    String newName = name.replace("[", ".").replace("]", "");
+                    map.put(ExampleTableConstraints.NAME, newName);
+                }
+                return map;
+            })
+            .collect(Collectors.toList());
+        return data.withRows(newMapList);
     }
 
     public final void requestIsSent(String request) {
@@ -149,7 +191,8 @@ public abstract class WebServiceHandler {
 
     public final void responseValuesMatch(String response, ExamplesTable expectedValues) {
         endpointRegistry.validateResponse(response);
-        verifyProperties(testContext.get(response), expectedValues);
+        ExamplesTable convertedValues = convertCollectionNotation(expectedValues);
+        verifyProperties(testContext.get(response), convertedValues);
     }
 
     public final void storeDataInContext(String requestOrResponse, ExamplesTable mapping) {
@@ -164,12 +207,24 @@ public abstract class WebServiceHandler {
                 testContext.put(alias, val, MetadataUtil.userDefined());
             };
         } else {
+            final Document[] xmlResponse = { null };
+            final Document[] xmlResponseWithoutNamesPaces = { null };
+
             Object response = testContext.get(requestOrResponse);
             rowConsumer = row -> {
                 String propertyName = row.get(ExampleTableConstraints.NAME);
                 String alias = row.get(ExampleTableConstraints.ALIAS);
-                Object val = ReflectionUtils.getPropertyValue(response, propertyName);
-                testContext.put(alias, val, MetadataUtil.userDefined());
+                Object value;
+                if (propertyName.startsWith(SLASH_PREFIX)){
+                    if (NAMESPACE_AWARE.equals(row.get(ExampleTableConstraints.MODE))){
+                        value = evaluateRowWithNamespaces(xmlResponse, propertyName, response);
+                    } else {
+                        value = evaluateRowWithoutNamespaces(xmlResponseWithoutNamesPaces, propertyName, response);
+                    }
+                } else {
+                    value = ReflectionUtils.getPropertyValue(response, propertyName);
+                }
+                testContext.put(alias, value, MetadataUtil.userDefined());
             };
         }
 
@@ -217,7 +272,7 @@ public abstract class WebServiceHandler {
      *      requestFactory.withFieldAccessStrategy();
      * }</pre>
      * <p>
-     * or you can reqister custom handler for request modification
+     * or you can register custom handler for request modification
      * <pre>{@code
      *      requestFactory
      *          .handler...
@@ -287,28 +342,99 @@ public abstract class WebServiceHandler {
         isTrue(elementsMapping.getHeaders().contains(
             ExampleTableConstraints.EXPECTED_VALUE), "Example table must contain column: " + ExampleTableConstraints.EXPECTED_VALUE);
 
+        final Document[] xmlResponseWithoutNamesPaces = { null };
+        final Document[] xmlResponse = { null };
+
         elementsMapping.getRowsAsParameters()
             .forEach(p -> {
                 String propertyName = p.valueAs(ExampleTableConstraints.NAME, String.class);
                 String expectedValue = p.valueAs(ExampleTableConstraints.EXPECTED_VALUE, String.class);
-                Object actualValue = ReflectionUtils.getPropertyValue(bean, propertyName);
+                Object actualValue;
+                if (propertyName.startsWith(SLASH_PREFIX)){
+                    if (NAMESPACE_AWARE.equals(getModeParameter(p))){
+                        actualValue = evaluateRowWithNamespaces(xmlResponse, propertyName, bean);
+                    } else {
+                        actualValue = evaluateRowWithoutNamespaces(xmlResponseWithoutNamesPaces, propertyName, bean);
+                    }
+                } else {
+                    actualValue = ReflectionUtils.getPropertyValue(bean, propertyName);
+                }
                 getVerifier(p).verify(actualValue, expectedValue);
             });
     }
 
-    private Verifier getVerifier(Parameters parameters) {
-        String verifierName = VerifierNames.EQ;
+    private String getModeParameter(Parameters row){
+        try{
+            return row.valueAs(ExampleTableConstraints.MODE, String.class);
+        } catch (ConvertedParameters.ValueNotFound e) {
+            return null;
+        }
+    }
 
-        Map.Entry<String, String> verifierEntry = parameters.values().entrySet().stream()
+    private Object evaluateRowWithNamespaces(Document[] xmlResponse, String propertyName, Object bean){
+        if(xmlResponse[0] == null){
+            xmlResponse[0] = createXmlResponse(bean);
+        }
+        return evaluateXpath(xmlResponse[0], propertyName);
+    }
+
+    private Object evaluateRowWithoutNamespaces(Document[] xmlResponse, String propertyName, Object bean){
+        if(xmlResponse[0] == null){
+            xmlResponse[0] = cleanNameSpace(createXmlResponse(bean));
+        }
+        return evaluateXpath(xmlResponse[0], propertyName);
+    }
+
+    @SneakyThrows(XPathExpressionException.class)
+    private Object evaluateXpath(Document document, String expression) {
+        XPath xpath = XPathFactory.newInstance().newXPath();
+        return xpath.compile(expression).evaluate(document, XPathConstants.STRING);
+    }
+
+    @SneakyThrows({ ParserConfigurationException.class, JAXBException.class })
+    private Document createXmlResponse(Object bean) {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        DocumentBuilder documentBuilder = factory.newDocumentBuilder();
+        Document document = documentBuilder.newDocument();
+        JAXBContext context = JAXBContext.newInstance(bean.getClass());
+        Marshaller marshaller = context.createMarshaller();
+        marshaller.marshal(bean, document);
+        return document;
+    }
+
+    public Document cleanNameSpace(Document document) {
+        NodeList list = document.getChildNodes();
+        for (int i = 0; i < list.getLength(); i++) {
+            removeNameSpace(list.item(i), "");
+        }
+        return document;
+    }
+
+    private void removeNameSpace(Node node, String nameSpaceURI) {
+        if (node.getNodeType() == Node.ELEMENT_NODE) {
+            Document ownerDoc = node.getOwnerDocument();
+            NamedNodeMap map = node.getAttributes();
+            Node n;
+            while (map.getLength() != 0) {
+                n = map.item(0);
+                map.removeNamedItemNS(n.getNamespaceURI(), n.getLocalName());
+            }
+            ownerDoc.renameNode(node, nameSpaceURI, node.getLocalName());
+        }
+        NodeList list = node.getChildNodes();
+        for (int i = 0; i < list.getLength(); i++) {
+            removeNameSpace(list.item(i), nameSpaceURI);
+        }
+    }
+
+    private Verifier getVerifier(Parameters parameters) {
+        String verifierName = parameters.values().entrySet().stream()
             .filter(e -> e.getKey().equals(ExampleTableConstraints.OPERATOR) || e.getKey().equals(ExampleTableConstraints.VERIFIER))
+            .map(Map.Entry::getValue)
             .findFirst()
             .orElse(null);
 
-        if (verifierEntry != null && !verifierEntry.getValue().isEmpty()) {
-            verifierName = verifierEntry.getValue();
-        }
-
-        return verifierResolver.getVerifierByName(verifierName);
+        return verifierResolver.getVerifierByName(verifierName, equalsVerifier);
     }
 
 }

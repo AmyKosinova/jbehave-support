@@ -1,13 +1,11 @@
 package org.jbehavesupport.core.ssh
 
-import org.junit.Test
 import spock.lang.Specification
 
 import static groovy.test.GroovyAssert.shouldFail
 
 class SshSettingTest extends Specification {
 
-    @Test
     void "multiple hostnames, rest single values, user/password"() {
         def hostnames = ["url1", "url2"] as String[]
         def ports = [666] as int[]
@@ -37,14 +35,13 @@ class SshSettingTest extends Specification {
             .users(users)
             .passwords(passwords)
             .logPaths(logs)
-            .build();
+            .build()
 
         expect:
         assert settings.size() == 2
         assert setting1, setting2 in settings
     }
 
-    @Test
     void "multiple values, user/password"() {
         def hostnames = ["url1", "url2"] as String[]
         def ports = [666, 777] as int[]
@@ -81,7 +78,6 @@ class SshSettingTest extends Specification {
         assert setting1, setting2 in settings
     }
 
-    @Test
     void "multiple values, user/password + key/keypass"() {
         def hostnames = ["url1", "url2"] as String[]
         def ports = [666, 777] as int[]
@@ -123,7 +119,6 @@ class SshSettingTest extends Specification {
         assert setting1, setting2 in settings
     }
 
-    @Test
     void "malformed builder data"() {
 
         when:
@@ -140,7 +135,7 @@ class SshSettingTest extends Specification {
         }.getMessage()
 
         then:
-        causeMsg.equals(message)
+        causeMsg == message
 
         where:
         hostnames | ports | users  | logPaths | passwords | keyPaths | keyPassphrases || message
@@ -164,7 +159,6 @@ class SshSettingTest extends Specification {
         ["url1"]  | [12]  | ["us"] | ["c:"]   | []        | []       | []             || "please provide one of auth principals: password / key path"
     }
 
-    @Test
     void "wrong array sizes"() {
         when:
         String causeMsg = shouldFail(UnsupportedOperationException.class) {
@@ -178,7 +172,7 @@ class SshSettingTest extends Specification {
         }.getMessage()
 
         then:
-        causeMsg.equals(message)
+        causeMsg == message
 
         where:
         ports        | users              | logPaths           | passwords    || message

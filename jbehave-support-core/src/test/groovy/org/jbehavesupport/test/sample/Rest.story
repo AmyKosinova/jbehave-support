@@ -86,23 +86,51 @@ Then response from [TEST] REST API has status [200] and values match:
 
 Scenario: json with collections
 When [POST] request to [TEST]/[user/] is sent with data:
-| name                 | data           | contextAlias      |
-| firstName            | Pedro          | FIRST_NAME        |
-| lastName             | Salgado        | LAST_NAME         |
-| addresses[0].country | Brazil         | ADDRESS_0_COUNTRY |
-| addresses[0].city    | Rio de Janeiro | ADDRESS_0_CITY    |
-| addresses[1].country | Austria        | ADDRESS_1_COUNTRY |
-| addresses[1].city    | Graz           | ADDRESS_1_CITY    |
+| name                    | data           | contextAlias        |
+| firstName               | Pedro          | FIRST_NAME          |
+| lastName                | Salgado        | LAST_NAME           |
+| addresses[0].country    | Brazil         | ADDRESS_0_COUNTRY   |
+| addresses[0].city       | Rio de Janeiro | ADDRESS_0_CITY      |
+| addresses[0].details[0] | details 0 0    | ADDRESS_0_DETAILS_0 |
+| addresses[0].details[1] | details 0 1    | ADDRESS_0_DETAILS_1 |
+| addresses[1].country    | Austria        | ADDRESS_1_COUNTRY   |
+| addresses[1].city       | Graz           | ADDRESS_1_CITY      |
 Then response from [TEST] REST API has status [200] and values match:
-| name                 | expectedValue          | verifier |
-| @header.Content-Type | application/json       | CONTAINS |
-| id                   |                        | NOT_NULL |
-| firstName            | {CP:FIRST_NAME}        |          |
-| lastName             | {CP:LAST_NAME}         |          |
-| addresses[0].country | {CP:ADDRESS_0_COUNTRY} |          |
-| addresses[0].city    | {CP:ADDRESS_0_CITY}    |          |
-| addresses[1].country | {CP:ADDRESS_1_COUNTRY} |          |
-| addresses[1].city    | {CP:ADDRESS_1_CITY}    |          |
+| name                    | expectedValue            | verifier |
+| @header.Content-Type    | application/json         | CONTAINS |
+| id                      |                          | NOT_NULL |
+| firstName               | {CP:FIRST_NAME}          |          |
+| lastName                | {CP:LAST_NAME}           |          |
+| addresses[0].country    | {CP:ADDRESS_0_COUNTRY}   |          |
+| addresses[0].city       | {CP:ADDRESS_0_CITY}      |          |
+| addresses[0].details[0] | {CP:ADDRESS_0_DETAILS_0} |          |
+| addresses[0].details[1] | {CP:ADDRESS_0_DETAILS_1} |          |
+| addresses[1].country    | {CP:ADDRESS_1_COUNTRY}   |          |
+| addresses[1].city       | {CP:ADDRESS_1_CITY}      |          |
+
+Scenario: collections with alternative notations
+When [POST] request to [TEST]/[user/] is sent with data:
+| name                  | data           | contextAlias        |
+| firstName             | Pedro          | FIRST_NAME          |
+| lastName              | Salgado        | LAST_NAME           |
+| addresses.0.country   | Brazil         | ADDRESS_0_COUNTRY   |
+| addresses.0.city      | Rio de Janeiro | ADDRESS_0_CITY      |
+| addresses.0.details.0 | details 0 0    | ADDRESS_0_DETAILS_0 |
+| addresses.0.details.1 | details 0 1    | ADDRESS_0_DETAILS_1 |
+| addresses.1.country   | Austria        | ADDRESS_1_COUNTRY   |
+| addresses.1.city      | Graz           | ADDRESS_1_CITY      |
+Then response from [TEST] REST API has status [200] and values match:
+| name                    | expectedValue            | verifier |
+| @header.Content-Type    | application/json         | CONTAINS |
+| id                      |                          | NOT_NULL |
+| firstName               | {CP:FIRST_NAME}          |          |
+| lastName                | {CP:LAST_NAME}           |          |
+| addresses[0].country    | {CP:ADDRESS_0_COUNTRY}   |          |
+| addresses[0].city       | {CP:ADDRESS_0_CITY}      |          |
+| addresses[0].details[0] | {CP:ADDRESS_0_DETAILS_0} |          |
+| addresses[0].details[1] | {CP:ADDRESS_0_DETAILS_1} |          |
+| addresses[1].country    | {CP:ADDRESS_1_COUNTRY}   |          |
+| addresses[1].city       | {CP:ADDRESS_1_CITY}      |          |
 
 
 Scenario: double-digit indexed collections
@@ -256,19 +284,86 @@ Then response from [TEST] REST API has status [BAD_REQUEST]
 
 Scenario: file upload
 When [POST] request to [TEST]/[base64/multipart/] is sent with data:
-| name                 | data                |
-| @header.Content-Type | multipart/form-data |
-| file1                | {RESOURCE:image.png}    |
-| file2                | {RESOURCE:image.png}    |
+| name                 | data                 |
+| @header.Content-Type | multipart/form-data  |
+| file1                | {RESOURCE:image.png} |
+| file2                | {RESOURCE:image.png} |
 Then response from [TEST] REST API has status [OK] and values match:
 | name  | expectedValue |
 | file1 | file1         |
 | file2 | file2         |
 
 When [POST] request to [TEST]/[base64/multipart/] is sent with data:
-| name                 | data                |
-| @header.Content-Type | multipart/form-data |
-| data                 | {RESOURCE:image.png}    |
-| firstName            | someName            |
-| lastName             | lastName            |
+| name                 | data                 |
+| @header.Content-Type | multipart/form-data  |
+| data                 | {RESOURCE:image.png} |
+| firstName            | someName             |
+| lastName             | lastName             |
 Then response from [TEST] REST API has status [OK]
+
+Scenario: test success handlers
+When [POST] request to [TEST]/[mirror/] is sent with data:
+| name             | data        |
+| httpStatus       | CREATED     |
+| payload[0]       | happy       |
+Then response from [TEST] REST API is successful
+
+When [POST] request to [TEST]/[mirror/] is sent with data:
+| name             | data        |
+| httpStatus       | CREATED     |
+| payload[0]       | happy       |
+| payload[1]       | astronaut   |
+Then response from [TEST] REST API is successful and values match:
+| name       | expectedValue |
+| payload[1] | astronaut     |
+
+Scenario: json with different value types than String
+When [POST] request to [TEST]/[user/] is sent with data:
+| name        | data     | type    |
+| firstName   | Mario    | string  |
+| age         | 24       | number  |
+| height      | 1.56     | number  |
+| plumber     | true     | boolean |
+| brother     | Luigi    |         |
+| princess    | {NULL}   |         |
+| powerups[0] | fireball | string  |
+| powerups[1] | {NULL}   | string  |
+
+Then response from [TEST] REST API has status [200]
+
+Scenario: json with empty list
+When [POST] request to [TEST]/[user/] is sent with data:
+| name      | data   | type    |
+| firstName | Mario  | string  |
+| age       | 24     | number  |
+| height    | 1.56   | number  |
+| plumber   | true   | boolean |
+| brother   | Luigi  |         |
+| princess  | {NULL} |         |
+| weapons[] |        |         |
+| cats[]    | {NULL} |         |
+| hats[]    | {NULL} |         |
+| hats[0]   | topHat |         |
+
+Then response from [TEST] REST API has status [200]
+
+Scenario: saving raw json
+When [POST] request to [TEST]/[user/] is sent with data:
+| name      | data    |
+| firstName | Pedro   |
+| lastName  | Salgado |
+Then response from [TEST] REST API has status [200]
+When response values from [TEST] REST API are saved:
+| name  | contextAlias |
+| @body | JSON_BODY    |
+
+Scenario: using JSONPath
+When [POST] request to [TEST]/[user/] is sent with data:
+| name                 | data                           | contextAlias |
+| firstName            | Bruno                          |              |
+| lastName             | {RANDOM_STRING:10}             | LAST_NAME    |
+Then response from [TEST] REST API has status [200] and values match:
+| name                                   | expectedValue    | verifier |
+| $[?(@.firstName=='Bruno')].id          |                  | NOT_NULL |
+| $.firstName                            | Bruno            |          |
+| $[?(@.firstName=='Bruno')].lastName    | {CP:LAST_NAME}   |          |

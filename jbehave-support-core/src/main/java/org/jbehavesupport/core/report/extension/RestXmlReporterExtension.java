@@ -1,10 +1,12 @@
 package org.jbehavesupport.core.report.extension;
 
-import static org.springframework.util.StringUtils.isEmpty;
+import static org.springframework.util.StringUtils.hasText;
 
 import java.io.IOException;
 import java.io.Writer;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.HashMap;
@@ -13,9 +15,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.jbehavesupport.core.report.ReportContext;
-
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.io.IOUtils;
+import org.jbehavesupport.core.TestContext;
+import org.jbehavesupport.core.internal.FileNameResolver;
+import org.jbehavesupport.core.report.ReportContext;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequest;
@@ -24,7 +29,15 @@ import org.springframework.http.client.ClientHttpRequestInterceptor;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.util.MimeType;
 
+@RequiredArgsConstructor
 public class RestXmlReporterExtension extends AbstractXmlReporterExtension implements ClientHttpRequestInterceptor {
+
+    @Value("${rest.directory:./target/reports}")
+    private String restDirectory;
+
+    private final TestContext testContext;
+
+    private final FileNameResolver fileNameResolver;
 
     private static final String REST_XML_REPORTER_EXTENSION = "rest";
     private static final String REQUEST_RESPONSE_TAG = "requestResponse";
@@ -35,6 +48,8 @@ public class RestXmlReporterExtension extends AbstractXmlReporterExtension imple
     private static final String HEADER_TAG = "header";
     private static MimeType[] compatibleMimeTypes =
         new MimeType[]{new MimeType("text"), new MimeType("application", "json"), new MimeType("application", "xml")};
+    private static MimeType multipartFormDataType = new MimeType("multipart", "form-data");
+    private static final String FILE_NAME_PATTERN = "multipart_%s.log";
 
     private final Set<RestMessageContext> messages = new LinkedHashSet<>();
 
@@ -67,9 +82,12 @@ public class RestXmlReporterExtension extends AbstractXmlReporterExtension imple
                     break;
                 }
             }
+            if (multipartFormDataType.isCompatibleWith(requestContentType)) {
+                restMessageContextBuilder.requestJsonBody(handleMultipart(((ClientHttpRequest) httpRequest).getBody().toString()));
+            }
 
             clientHttpResponse = clientHttpRequestExecution.execute(httpRequest, bytes);
-            String responseBodyAsString = IOUtils.toString(clientHttpResponse.getBody(), Charset.forName("UTF-8"));
+            String responseBodyAsString = IOUtils.toString(clientHttpResponse.getBody(), StandardCharsets.UTF_8);
             restMessageContextBuilder
                 .responseTimeStamp(LocalDateTime.now())
                 .responseStatus(clientHttpResponse.getStatusCode())
@@ -80,6 +98,9 @@ public class RestXmlReporterExtension extends AbstractXmlReporterExtension imple
                     restMessageContextBuilder.responseJsonBody(responseBodyAsString);
                     break;
                 }
+            }
+            if (multipartFormDataType.isCompatibleWith(responseContentType)) {
+                restMessageContextBuilder.responseJsonBody(handleMultipart(responseBodyAsString));
             }
         } finally {
             messages.add(restMessageContextBuilder.build());
@@ -104,13 +125,15 @@ public class RestXmlReporterExtension extends AbstractXmlReporterExtension imple
     }
 
     private void printHeaders(final Writer writer, HttpHeaders headers) {
-        printBegin(writer, HEADERS_TAG);
-        headers.entrySet().forEach(he -> printSelfClosed(writer, HEADER_TAG, getHeaderAttributes(he)));
-        printEnd(writer, HEADERS_TAG);
+        if (headers != null) {
+            printBegin(writer, HEADERS_TAG);
+            headers.entrySet().forEach(he -> printSelfClosed(writer, HEADER_TAG, getHeaderAttributes(he)));
+            printEnd(writer, HEADERS_TAG);
+        }
     }
 
     private void printJsonBody(final Writer writer, final String message) {
-        if (!isEmpty(message)) {
+        if (hasText(message)) {
             printBegin(writer, BODY_TAG);
             printCData(writer, message);
             printEnd(writer, BODY_TAG);
@@ -127,8 +150,12 @@ public class RestXmlReporterExtension extends AbstractXmlReporterExtension imple
 
     private Map<String, String> getResponseMessageAttributes(RestMessageContext message) {
         Map<String, String> responseMessageAttributes = new HashMap<>();
-        responseMessageAttributes.put("status", String.valueOf(message.getResponseStatus()));
-        responseMessageAttributes.put("time", message.getResponseTimeStamp().atZone(ZoneId.systemDefault()).toString());
+        if (message.getResponseStatus() != null) {
+            responseMessageAttributes.put("status", String.valueOf(message.getResponseStatus()));
+        }
+        if (message.getResponseTimeStamp() != null) {
+            responseMessageAttributes.put("time", message.getResponseTimeStamp().atZone(ZoneId.systemDefault()).toString());
+        }
         return responseMessageAttributes;
     }
 
@@ -139,4 +166,9 @@ public class RestXmlReporterExtension extends AbstractXmlReporterExtension imple
         return headerAttributes;
     }
 
+    private String handleMultipart(String body) throws IOException {
+        Path destinationPath = fileNameResolver.resolveFilePath(FILE_NAME_PATTERN, restDirectory);
+        Files.write(destinationPath, body.getBytes());
+        return "multipart/form-data: " + destinationPath;
+    }
 }

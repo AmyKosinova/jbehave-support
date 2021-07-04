@@ -8,16 +8,13 @@ import java.util.Map;
 import org.jbehavesupport.core.web.WebAction;
 import org.jbehavesupport.core.web.WebActionResolver;
 
-import org.springframework.stereotype.Component;
-
-@Component
 public class WebActionResolverImpl implements WebActionResolver {
 
     private final Map<String, WebAction> actions;
 
     public WebActionResolverImpl(List<WebAction> actions) {
         this.actions = actions.stream()
-            .collect(toMap(e -> e.name(), e -> e));
+            .collect(toMap(WebAction::name, e -> e));
     }
 
     @Override

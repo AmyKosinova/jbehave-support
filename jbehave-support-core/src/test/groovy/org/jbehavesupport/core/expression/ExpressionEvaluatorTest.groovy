@@ -81,6 +81,7 @@ class ExpressionEvaluatorTest extends Specification {
         command                        || expected
         '{CONCAT:12:\\::345}'          || "12:345"
         '{CONCAT:\\{Hello:, world\\}}' || "{Hello, world}"
+        "{CONCAT:We:\\'re}"            || "We're"
     }
 
     @Unroll
@@ -103,7 +104,7 @@ class ExpressionEvaluatorTest extends Specification {
     @Unroll
     "Test evaluating {#command} with special characters read from test context should yield '#expected'"() {
         given:
-        testContext.put("UNESCAPED_STRING", "{x:y}");
+        testContext.put("UNESCAPED_STRING", "{x:y}")
 
         when:
         def actual = expressionEvaluator.evaluate(command)
@@ -120,10 +121,10 @@ class ExpressionEvaluatorTest extends Specification {
     "Test evaluating multiline expression"() {
         given:
         def multilineString = "Multi-line string with {UC:upper1}\n" +
-            "and {UC:upper2} strings";
+            "and {UC:upper2} strings"
 
         when:
-        def actual = expressionEvaluator.evaluate(multilineString);
+        def actual = expressionEvaluator.evaluate(multilineString)
 
         then:
         actual == expected
