@@ -3,17 +3,16 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.jbehavesupport</groupId>
     <artifactId>jbehave-support-core-test</artifactId>
-    <version>1.0.1-SNAPSHOT</version>
+    <version>2.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>jbehave-support-core-test</name>
     <description>Parent pom for jbehave-support test application</description>
 
     <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.0.6.RELEASE</version>
-        <relativePath /> <!-- lookup parent from repository -->
+        <groupId>org.jbehavesupport</groupId>
+        <artifactId>jbehave-support</artifactId>
+        <version>2.0.1-SNAPSHOT</version>
     </parent>
 
     <modules>
@@ -23,47 +22,25 @@
     </modules>
 
     <properties>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
-        <version.commons-lang3>3.6</version.commons-lang3>
-        <version.commons-io>2.4</version.commons-io>
-        <version.crash>1.3.2</version.crash>
-        <plugin.version.maven-jaxb2-plugin>0.13.1</plugin.version.maven-jaxb2-plugin>
+        <version.commons-io>2.18.0</version.commons-io>
+        <version.moxy>4.0.4</version.moxy>
+        <plugin.version.cxf-xjc-plugin>4.0.2</plugin.version.cxf-xjc-plugin>
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <maven.deploy.skip>true</maven.deploy.skip>
+        <sonar.skip>true</sonar.skip>
     </properties>
 
     <dependencyManagement>
         <dependencies>
-            <dependency>
-                <groupId>org.apache.commons</groupId>
-                <artifactId>commons-lang3</artifactId>
-                <version>${version.commons-lang3}</version>
-            </dependency>
             <dependency>
                 <groupId>commons-io</groupId>
                 <artifactId>commons-io</artifactId>
                 <version>${version.commons-io}</version>
             </dependency>
             <dependency>
-                <groupId>org.crashub</groupId>
-                <artifactId>crash.cli</artifactId>
-                <version>${version.crash}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.crashub</groupId>
-                <artifactId>crash.shell</artifactId>
-                <version>${version.crash}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.crashub</groupId>
-                <artifactId>crash.connectors.ssh</artifactId>
-                <version>${version.crash}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.crashub</groupId>
-                <artifactId>crash.embed.spring</artifactId>
-                <version>${version.crash}</version>
+                <groupId>org.eclipse.persistence</groupId>
+                <artifactId>org.eclipse.persistence.moxy</artifactId>
+                <version>${version.moxy}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -72,9 +49,17 @@
         <pluginManagement>
             <plugins>
                 <plugin>
-                    <groupId>org.jvnet.jaxb2.maven2</groupId>
-                    <artifactId>maven-jaxb2-plugin</artifactId>
-                    <version>${plugin.version.maven-jaxb2-plugin}</version>
+                    <groupId>org.apache.cxf</groupId>
+                    <artifactId>cxf-xjc-plugin</artifactId>
+                    <version>${plugin.version.cxf-xjc-plugin}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.sonatype.plugins</groupId>
+                    <artifactId>nexus-staging-maven-plugin</artifactId>
+                    <version>${plugin.version.nexus-staging-maven-plugin}</version>
+                    <configuration>
+                        <skipNexusStagingDeployMojo>true</skipNexusStagingDeployMojo>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>

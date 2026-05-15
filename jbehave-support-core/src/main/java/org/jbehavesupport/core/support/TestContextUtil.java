@@ -8,7 +8,6 @@ import java.util.Map;
 import org.jbehavesupport.core.TestContext;
 
 import lombok.experimental.UtilityClass;
-import org.apache.commons.lang3.StringUtils;
 import org.assertj.core.util.Strings;
 import org.jbehave.core.model.ExamplesTable;
 import org.jbehave.core.steps.Parameters;
@@ -22,7 +21,6 @@ import org.jbehavesupport.core.internal.MetadataUtil;
 @UtilityClass
 public class TestContextUtil {
     private static final String CONTEXT_DELIMITER = ".";
-    private static final String COLUMN_TYPE = "type";
 
     /**
      * Put all data from example table to test context.
@@ -38,9 +36,9 @@ public class TestContextUtil {
             String name = row.valueAs(ExampleTableConstraints.NAME, String.class);
             String key = (!Strings.isNullOrEmpty(prefix)) ? String.join(CONTEXT_DELIMITER, prefix, name) : name;
             String value = row.valueAs(ExampleTableConstraints.DATA, String.class);
-            String type = row.values().containsKey(COLUMN_TYPE) ? row.valueAs(COLUMN_TYPE, String.class) : null;
+            String type = row.values().containsKey(ExampleTableConstraints.TYPE) ? row.valueAs(ExampleTableConstraints.TYPE, String.class) : null;
 
-            if (StringUtils.isNoneEmpty(type)) {
+            if (isNoneEmpty(type)) {
                 testContext.put(key, null, MetadataUtil.type(type));
             } else {
                 testContext.put(key, value);
@@ -87,7 +85,11 @@ public class TestContextUtil {
 
     public static Object escape(Object value) {
         if (value instanceof String) {
-            return ((String) value).replace(":", "\\:").replace("{", "\\{").replace("}", "\\}");
+            return ((String) value)
+                .replace(":", "\\:")
+                .replace("{", "\\{")
+                .replace("}", "\\}")
+                .replace("'", "\\'");
         }
 
         return value;
@@ -95,7 +97,11 @@ public class TestContextUtil {
 
     public static Object unescape(Object value) {
         if (value instanceof String) {
-            return ((String) value).replace("\\:", ":").replace("\\{", "{").replace("\\}", "}");
+            return ((String) value)
+                .replace("\\:", ":")
+                .replace("\\{", "{")
+                .replace("\\}", "}")
+                .replace("\\'", "'");
         }
 
         return value;

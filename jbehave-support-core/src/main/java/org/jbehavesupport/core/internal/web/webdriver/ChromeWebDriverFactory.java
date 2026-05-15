@@ -1,17 +1,15 @@
 package org.jbehavesupport.core.internal.web.webdriver;
 
-import java.util.concurrent.TimeUnit;
-
 import org.jbehavesupport.core.web.WebDriverFactory;
-
-import io.github.bonigarcia.wdm.BrowserManager;
-import io.github.bonigarcia.wdm.ChromeDriverManager;
+import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeDriverService;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
+import java.time.Duration;
 
 @Component
 public class ChromeWebDriverFactory implements WebDriverFactory {
@@ -24,16 +22,17 @@ public class ChromeWebDriverFactory implements WebDriverFactory {
     @Value("${web.browser.driver.location:#{null}}")
     private String browserDriverLocation;
 
+    @Value("${web.browser.version:#{null}}")
+    private String browserVersion;
+
     @Value("${web.browser.driver.port:#{null}}")
     private Integer browserPort;
-
-    @Value("${web.browser.driver.version:#{null}}")
-    private String browserDriverVersion;
 
     @Value("${web.browser.driver.startup.arguments:#{null}}")
     private String browserStartupArguments;
 
-    private boolean driverSetup = false;
+    @Value("${web.browser.binary.location:#{null}}")
+    private String binaryLocation;
 
     private RemoteWebDriver driver = null;
 
@@ -45,29 +44,31 @@ public class ChromeWebDriverFactory implements WebDriverFactory {
     @Override
     public RemoteWebDriver createWebDriver() {
         createChromeDriver();
-        driver.manage().timeouts().implicitlyWait(timeout, TimeUnit.SECONDS);
+        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(timeout));
+        driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(timeout));
+        driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(timeout));
         return driver;
     }
 
     private void createChromeDriver() {
-        if (!driverSetup) {
-            if (browserDriverLocation != null) {
-                System.setProperty("webdriver.chrome.driver", browserDriverLocation);
-            } else {
-                BrowserManager browserManager = ChromeDriverManager.getInstance();
-                if (browserDriverVersion != null) {
-                    browserManager.version(browserDriverVersion);
-                }
-                browserManager.setup();
-            }
-            driverSetup = true;
+        if (browserDriverLocation != null) {
+            System.setProperty("webdriver.chrome.driver", browserDriverLocation);
         }
 
         ChromeOptions options = new ChromeOptions();
+
+        if (browserVersion != null){
+            options.setBrowserVersion(browserVersion);
+        }
+
         if (browserStartupArguments != null) {
-            options.addArguments(browserStartupArguments);
+            options.addArguments(browserStartupArguments.split("\\s+"));
         } else {
             options.addArguments("--start-maximized");
+        }
+
+        if (binaryLocation != null) {
+            options.setBinary(binaryLocation);
         }
 
         ChromeDriverService.Builder driverServiceBuilder = new ChromeDriverService.Builder();
@@ -78,6 +79,11 @@ public class ChromeWebDriverFactory implements WebDriverFactory {
         }
 
         driver = new ChromeDriver(driverServiceBuilder.build(), options);
+    }
+
+    @Override
+    public Class<? extends WebDriver> getProxyClass() {
+        return ChromeDriver.class;
     }
 
 }

@@ -12,17 +12,17 @@ import org.jbehave.core.steps.ParameterConverters;
 import org.springframework.stereotype.Component;
 
 @Component
-public class XMLGregorianCalendarConverter implements ParameterConverters.ParameterConverter {
+public class XMLGregorianCalendarConverter extends ParameterConverters.FromStringParameterConverter<XMLGregorianCalendar> {
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("[dd/MM/yyyy][yyyy-MM-dd]");
 
     @Override
-    public boolean accept(Type type) {
+    public boolean canConvertTo(Type type) {
         return XMLGregorianCalendar.class == type;
     }
 
     @Override
-    public Object convertValue(String s, Type type) {
+    public XMLGregorianCalendar convertValue(String s, Type type) {
         return convert(LocalDate.parse(s, DATE_TIME_FORMATTER));
     }
 

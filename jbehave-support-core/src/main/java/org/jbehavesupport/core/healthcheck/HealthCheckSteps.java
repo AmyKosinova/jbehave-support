@@ -1,22 +1,19 @@
 package org.jbehavesupport.core.healthcheck;
 
-import static java.util.stream.Collectors.toList;
-
-import java.util.ArrayList;
 import java.util.List;
 
+import lombok.RequiredArgsConstructor;
+import org.assertj.core.api.SoftAssertions;
 import org.jbehave.core.annotations.Given;
 import org.jbehave.core.model.ExamplesTable;
 import org.jbehave.core.steps.Row;
-import org.junit.runners.model.MultipleFailureException;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.BeanFactoryAnnotationUtils;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * This class contains step for checking healthy of tested components.
+ * This class contains a step for checking the health of tested components.
  * The health-check is performed by bean implementing interface {@link HealthCheck}
  * and with configured qualifier.
  * <p>
@@ -42,32 +39,29 @@ import org.springframework.stereotype.Component;
  * </pre>
  */
 @Component
+@RequiredArgsConstructor
 public final class HealthCheckSteps {
 
-    @Autowired
-    private ConfigurableListableBeanFactory beanFactory;
+    private final ConfigurableListableBeanFactory beanFactory;
 
     @Given("these components are healthy:$componentList")
-    public void checkComponentsAreHealthy(ExamplesTable componentList) throws MultipleFailureException {
+    public void checkComponentsAreHealthy(ExamplesTable componentList) {
         List<String> componentQualifiers = componentList.getRowsAsParameters().stream()
             .map(Row::values)
             .map(row -> row.get("component"))
-            .collect(toList());
+            .toList();
 
-        List<Throwable> exceptions = new ArrayList<>();
+        SoftAssertions softly = new SoftAssertions();
         for (String componentQualifier : componentQualifiers) {
             HealthCheck healthCheck = resolveHealthCheck(componentQualifier);
             try {
                 healthCheck.check();
             } catch (Exception e) {
-                IllegalStateException ie = new IllegalStateException("Component " + componentQualifier + " is not healthy. " + e.getMessage(), e);
-                exceptions.add(ie);
+                softly.fail("Component " + componentQualifier + " is not healthy. " + e.getMessage(), e);
             }
         }
 
-        if (!exceptions.isEmpty()) {
-            throw new MultipleFailureException(exceptions);
-        }
+        softly.assertAll();
     }
 
     private HealthCheck resolveHealthCheck(String qualifier) {

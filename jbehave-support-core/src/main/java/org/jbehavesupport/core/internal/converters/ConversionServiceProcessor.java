@@ -1,6 +1,6 @@
 package org.jbehavesupport.core.internal.converters;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.convert.support.ConfigurableConversionService;
@@ -20,6 +20,7 @@ public class ConversionServiceProcessor {
         conversionService.addConverter(new LocalDateTimeConverter());
         conversionService.addConverter(new ZonedDateTimeConverter());
         conversionService.addConverter(new XmlGregorianCalendarConverter());
+        conversionService.addConverterFactory(new StringToXmlEnumConverterFactory());
     }
 
 }

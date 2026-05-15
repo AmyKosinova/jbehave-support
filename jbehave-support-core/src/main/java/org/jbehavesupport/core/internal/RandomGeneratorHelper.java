@@ -1,9 +1,6 @@
 package org.jbehavesupport.core.internal;
 
-import java.time.LocalDate;
-
 import org.apache.commons.lang3.RandomStringUtils;
-import org.apache.commons.lang3.RandomUtils;
 
 /**
  * The type Random generator helper.
@@ -38,10 +35,4 @@ public final class RandomGeneratorHelper {
         return RandomStringUtils.randomAlphabetic(count);
     }
 
-    public static LocalDate randomDate() {
-        long minDay = LocalDate.of(1970, 1, 1).toEpochDay();
-        long maxDay = LocalDate.of(2050, 12, 31).toEpochDay();
-        long randomDay = RandomUtils.nextInt((int) minDay, (int) maxDay);
-        return LocalDate.ofEpochDay(randomDay);
-    }
 }

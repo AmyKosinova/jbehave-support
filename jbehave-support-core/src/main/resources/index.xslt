@@ -1,8 +1,7 @@
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
-    <xsl:output method="html" indent="yes"/>
+    <xsl:output method="html" doctype-system="about:legacy-compat"/>
 
     <xsl:template match="/">
-        <xsl:text disable-output-escaping='yes'>&lt;!DOCTYPE html&gt;</xsl:text>
         <html>
             <head>
                 <meta charset="utf-8"/>
@@ -229,8 +228,8 @@
                             Help
                         </a>
                     </div>
-                    <div class="col-4 text-muted text-center" id="userVersion" version="#BUILD_VERSION">
-                        Created by jbehave-support reporter (build #BUILD_VERSION)
+                    <div class="col-4 text-muted text-center" id="userVersion" version="${project.version}">
+                        Created by jbehave-support reporter (build ${project.version})
                     </div>
                     <div class="col-4 text-muted text-center invisible" id="currentVersion">
                         Current version: connection error

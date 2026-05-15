@@ -1,28 +1,29 @@
 package org.jbehavesupport.core.internal.web;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.openqa.selenium.support.ui.ExpectedConditions.elementToBeClickable;
 import static org.openqa.selenium.support.ui.ExpectedConditions.presenceOfElementLocated;
+import static org.jbehavesupport.core.internal.web.DummyWebElement.URL;
+import static org.jbehavesupport.core.internal.web.DummyWebElement.TITLE;
 
+import java.time.Duration;
 import java.util.function.Consumer;
 
+import lombok.RequiredArgsConstructor;
 import org.jbehavesupport.core.web.WebElementLocator;
 import org.jbehavesupport.core.web.WebElementRegistry;
 import org.jbehavesupport.core.web.WebSetting;
 import org.jbehavesupport.core.web.WebSteps;
-
-import lombok.RequiredArgsConstructor;
 import org.openqa.selenium.By;
-import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
-import org.openqa.selenium.support.ui.ExpectedCondition;
+import org.openqa.selenium.remote.RemoteWebElement;
 import org.openqa.selenium.support.ui.FluentWait;
-import org.openqa.selenium.support.ui.WebDriverWait;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
-@Component
+/**
+ * Wraps returned WebElements in proxy {@link RefreshableWebElementInterceptor}.
+ */
 @RequiredArgsConstructor
 public class WebElementLocatorImpl implements WebElementLocator {
 
@@ -34,25 +35,29 @@ public class WebElementLocatorImpl implements WebElementLocator {
 
     @Override
     public WebElement findElement(String pageName, String elementName) {
+        if (elementName.equals(URL)) {
+            return new DummyWebElement(driver.getCurrentUrl());
+        } else if (elementName.equals(TITLE)) {
+            return new DummyWebElement(driver.getTitle());
+        }
         By locator = elementRegistry.getLocator(pageName, elementName);
-        return waiting().until(presenceOfElementLocated(locator));
+        return getRefreshableWebElementProxy((RemoteWebElement)waiting().until(presenceOfElementLocated(locator)), elementName, pageName);
     }
 
     @Override
     public WebElement findClickableElement(String pageName, String elementName) {
         By locator = elementRegistry.getLocator(pageName, elementName);
-        return waiting().until(elementToBeClickable(locator));
+        return getRefreshableWebElementProxy((RemoteWebElement)waiting().until(elementToBeClickable(locator)), elementName, pageName);
+    }
+
+    public RemoteWebElement findPureElement(String pageName, String elementName){
+        By locator = elementRegistry.getLocator(pageName, elementName);
+        return (RemoteWebElement)waiting().until(presenceOfElementLocated(locator));
     }
 
     private FluentWait<WebDriver> waiting() {
-        waitForDocumentIsReady();
         waitForCustomCondition();
-        return new FluentWait<>(driver).withTimeout(timeout, SECONDS);
-    }
-
-    private void waitForDocumentIsReady() {
-        new WebDriverWait(driver, 10).until((ExpectedCondition<Boolean>) wd ->
-            ((JavascriptExecutor) wd).executeScript("return document.readyState").equals("complete"));
+        return new FluentWait<>(driver).withTimeout(Duration.ofSeconds(timeout));
     }
 
     private void waitForCustomCondition() {
@@ -63,6 +68,13 @@ public class WebElementLocatorImpl implements WebElementLocator {
                 waitForLoad.accept(driver);
             }
         }
+    }
+
+    private WebElement getRefreshableWebElementProxy(RemoteWebElement element, String name, String page) {
+        ProxyFactory factory = new ProxyFactory(element);
+        factory.setProxyTargetClass(true);
+        factory.addAdvice(new RefreshableWebElementInterceptor(element, this, name, page));
+        return (WebElement) factory.getProxy();
     }
 
 }

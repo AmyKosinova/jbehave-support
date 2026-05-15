@@ -1,20 +1,19 @@
 package org.jbehavesupport.core.internal.verification;
 
-import java.util.List;
-
+import lombok.RequiredArgsConstructor;
 import org.jbehavesupport.core.verification.Verifier;
 import org.jbehavesupport.core.verification.VerifierResolver;
-
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.NoUniqueBeanDefinitionException;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
-@Component
+import java.util.List;
+
+import static org.springframework.util.StringUtils.hasText;
+
+@RequiredArgsConstructor
 public class VerifierResolverImpl implements VerifierResolver {
 
-    @Autowired
-    private List<Verifier> verifiers;
+    private final List<Verifier> verifiers;
 
     public Verifier getVerifierByName(String name) {
         return verifiers.stream()
@@ -26,6 +25,10 @@ public class VerifierResolverImpl implements VerifierResolver {
                 return a;
             })
             .orElseThrow(() -> new NoSuchBeanDefinitionException(name));
+    }
+
+    public Verifier getVerifierByName(String name, Verifier verifierIfNameEmpty) {
+        return hasText(name) ? getVerifierByName(name) : verifierIfNameEmpty;
     }
 
 }

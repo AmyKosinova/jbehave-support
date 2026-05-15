@@ -1,3 +1,6 @@
+environmentInfo:
+  name: jbehave-support-test-environment
+
 ws:
   url: http://localhost:11110/services/
 
@@ -14,17 +17,22 @@ db:
 
 web:
   url: http://localhost:11110/
-  browser.driver.version: 2.38
+  screenshot.reporting.mode: FAILED
+numeric:
+  scale: 5
 
+# most of ssh setting values are generated dynamically in SshContainer class
 ssh:
   hostname: localhost
   port: 2000
   logPath: app.log
   timestampFormat: yyyy-MM-dd HH:mm:ss,SSS
   credentials:
-    user: sa
+    user: root
     password: sa
-    keyPath: 'classpath:/ssh/privateKey.pem'
+    keyPath: 'classpath:/ssh/key'
 
-jms:
-  brokerUrl: vm://localhost?broker.persistent=false
+browser-stack:
+  username: browser-stack-username
+  key: browser-stack-key
+  url: https://${browser-stack.username}:${browser-stack.key}@hub-cloud.browserstack.com/wd/hub

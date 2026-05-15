@@ -4,11 +4,18 @@
 
     <groupId>org.jbehavesupport</groupId>
     <artifactId>jbehave-support</artifactId>
-    <version>1.0.1-SNAPSHOT</version>
+    <version>2.0.1-SNAPSHOT</version>
     <name>jbehave-support</name>
     <packaging>pom</packaging>
     <description>Lightweight extension to jbehave</description>
     <url>https://embeditcz.github.io/jbehave-support/</url>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.5</version>
+        <relativePath /> <!-- lookup parent from repository -->
+    </parent>
 
     <scm>
         <connection>scm:git:https://github.com/EmbedITCZ/jbehave-support.git</connection>
@@ -34,71 +41,59 @@
             <name>Michal Bocek</name>
             <email>michal.bocek@gmail.com</email>
             <organization>EmbedIT</organization>
-            <organizationUrl>https://embedit.cz</organizationUrl>
+            <organizationUrl>https://www.embedit.com</organizationUrl>
         </developer>
         <developer>
             <name>Tomas Hradec</name>
             <email>thradec@gmail.com</email>
             <organization>EmbedIT</organization>
-            <organizationUrl>https://embedit.cz</organizationUrl>
+            <organizationUrl>https://www.embedit.com</organizationUrl>
         </developer>
         <developer>
             <name>Pavel Jandejsek</name>
             <email>pavel.jandejsek@gmail.com</email>
             <organization>EmbedIT</organization>
-            <organizationUrl>https://embedit.cz</organizationUrl>
+            <organizationUrl>https://www.embedit.com</organizationUrl>
         </developer>
         <developer>
             <name>Amy Kosinova</name>
             <email>amy.kosinova@gmail.com</email>
             <organization>EmbedIT</organization>
-            <organizationUrl>https://embedit.cz</organizationUrl>
+            <organizationUrl>https://www.embedit.com</organizationUrl>
+        </developer>
+        <developer>
+            <name>Daniel Smrcek</name>
+            <organization>EmbedIT</organization>
+            <organizationUrl>https://www.embedit.com</organizationUrl>
         </developer>
     </developers>
 
     <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <version.java.source>1.8</version.java.source>
-        <version.java.target>1.8</version.java.target>
+        <java.version>17</java.version>
 
-        <version.jbehave>4.1.3</version.jbehave>
-        <version.lombok>1.16.18</version.lombok>
-        <version.jbehave-junit-support>1.2.7</version.jbehave-junit-support>
-        <version.groovy.all>2.4.15</version.groovy.all>
-        <version.junit>4.12</version.junit>
-        <version.spockframework>1.0-groovy-2.4</version.spockframework>
-        <version.assertj>3.9.0</version.assertj>
-        <version.spring>4.3.10.RELEASE</version.spring>
-        <version.spring.ws-support>2.3.0.RELEASE</version.spring.ws-support>
-        <version.activemq-broker>5.14.5</version.activemq-broker>
-        <version.sshj>0.15.0</version.sshj>
-        <version.selenium>3.10.0</version.selenium>
-        <version.webdrivermanager>1.6.2</version.webdrivermanager>
-        <version.snakeyaml>1.17</version.snakeyaml>
-        <version.h2>1.4.192</version.h2>
-        <version.json-path>2.2.0</version.json-path>
-        <version.commons-lang3>3.3.2</version.commons-lang3>
-        <version.commons-dbcp>1.4</version.commons-dbcp>
-        <version.mockito-core>1.10.19</version.mockito-core>
-        <version.apache-httpclient>4.5.3</version.apache-httpclient>
-        <version.slf4j>1.7.6</version.slf4j>
-        <version.logback>1.0.9</version.logback>
-        <version.jackson-mapper-asl>1.9.12</version.jackson-mapper-asl>
-        <version.jackson>2.9.5</version.jackson>
+        <!-- enable annotation processing for lombok in java 23: https://github.com/projectlombok/lombok/issues/3752 -->
+        <maven.compiler.proc>full</maven.compiler.proc>
 
-        <plugin.version.maven-javadoc-plugin>2.8.1</plugin.version.maven-javadoc-plugin>
-        <plugin.version.maven-failsafe-plugin>2.19.1</plugin.version.maven-failsafe-plugin>
-        <plugin.version.maven-source-plugin>2.1.2</plugin.version.maven-source-plugin>
-        <plugin.version.maven-deploy-plugin>2.4</plugin.version.maven-deploy-plugin>
-        <plugin.version.maven-resources-plugin>2.5</plugin.version.maven-resources-plugin>
-        <plugin.version.maven-compiler-plugin>2.3.2</plugin.version.maven-compiler-plugin>
-        <plugin.version.jetty-maven-plugin>9.4.11.v20180605</plugin.version.jetty-maven-plugin>
-        <plugin.version.surefire-maven-plugin>2.18.1</plugin.version.surefire-maven-plugin>
-        <plugin.version.gmavenplus-plugin>1.5</plugin.version.gmavenplus-plugin>
-        <plugin.version.maven-release-plugin>2.5.3</plugin.version.maven-release-plugin>
-        <plugin.version.nexus-staging-maven-plugin>1.6.8</plugin.version.nexus-staging-maven-plugin>
-        <plugin.version.maven-gpg-plugin>1.6</plugin.version.maven-gpg-plugin>
+        <!-- it needs to be specified due to groovy and java code in one codebase -->
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+
+        <version.jbehave>5.0</version.jbehave>
+        <version.jbehave-junit-support>5.0.1</version.jbehave-junit-support>
+        <version.spockframework>2.4-M7-groovy-5.0</version.spockframework>
+        <version.sshj>0.39.0</version.sshj>
+        <version.commons-text>1.12.0</version.commons-text>
+        <version.commons-collections4>4.4</version.commons-collections4>
+        <version.moxy>4.0.4</version.moxy>
+
+        <!-- remove once boot is on same or newer version  -->
+        <selenium.version>4.13.0</selenium.version>
+
+        <plugin.version.gmavenplus-plugin>4.3.1</plugin.version.gmavenplus-plugin>
+        <plugin.version.maven-release-plugin>3.1.1</plugin.version.maven-release-plugin>
+        <plugin.version.nexus-staging-maven-plugin>1.6.13</plugin.version.nexus-staging-maven-plugin>
+        <plugin.version.maven-gpg-plugin>3.2.4</plugin.version.maven-gpg-plugin>
+        <plugin.version.sonar-maven-plugin>4.0.0.4121</plugin.version.sonar-maven-plugin>
+        <plugin.version.sonar-jacoco-plugin>3.3.2</plugin.version.sonar-jacoco-plugin>
     </properties>
 
     <modules>
@@ -119,29 +114,16 @@
                                 <goal>addSources</goal>
                                 <goal>addTestSources</goal>
                                 <goal>compile</goal>
-                                <goal>testCompile</goal>
+                                <goal>compileTests</goal>
                             </goals>
                         </execution>
                     </executions>
-                    <configuration>
-                        <testStubsOutputDirectory>${project.build.directory}/generated-test-sources/groovy-stubs/test</testStubsOutputDirectory>
-                    </configuration>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-source-plugin</artifactId>
-                    <version>${plugin.version.maven-source-plugin}</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-javadoc-plugin</artifactId>
-                    <version>${plugin.version.maven-javadoc-plugin}</version>
                 </plugin>
                 <plugin>
                     <!-- explicitly define maven-deploy-plugin after other to force exec order -->
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-deploy-plugin</artifactId>
-                    <version>${plugin.version.maven-deploy-plugin}</version>
+                    <version>${maven-deploy-plugin.version}</version>
                     <executions>
                         <execution>
                             <id>deploy</id>
@@ -153,29 +135,14 @@
                     </executions>
                 </plugin>
                 <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-failsafe-plugin</artifactId>
-                    <version>${plugin.version.maven-failsafe-plugin}</version>
+                    <groupId>org.sonarsource.scanner.maven</groupId>
+                    <artifactId>sonar-maven-plugin</artifactId>
+                    <version>${plugin.version.sonar-maven-plugin}</version>
                 </plugin>
                 <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-surefire-plugin</artifactId>
-                    <version>${plugin.version.surefire-maven-plugin}</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-resources-plugin</artifactId>
-                    <version>${plugin.version.maven-resources-plugin}</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-compiler-plugin</artifactId>
-                    <version>${plugin.version.maven-compiler-plugin}</version>
-                    <configuration>
-                        <source>${version.java.source}</source>
-                        <target>${version.java.target}</target>
-                        <encoding>${project.build.sourceEncoding}</encoding>
-                    </configuration>
+                    <groupId>org.codehaus.sonar.plugins</groupId>
+                    <artifactId>sonar-jacoco-plugin</artifactId>
+                    <version>${plugin.version.sonar-jacoco-plugin}</version>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -189,12 +156,6 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.projectlombok</groupId>
-                <artifactId>lombok</artifactId>
-                <scope>provided</scope>
-                <version>${version.lombok}</version>
-            </dependency>
-            <dependency>
                 <groupId>org.jbehavesupport</groupId>
                 <artifactId>jbehave-junit-support</artifactId>
                 <version>${version.jbehave-junit-support}</version>
@@ -203,11 +164,6 @@
                 <groupId>org.jbehave</groupId>
                 <artifactId>jbehave-spring</artifactId>
                 <version>${version.jbehave}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.codehaus.groovy</groupId>
-                <artifactId>groovy-all</artifactId>
-                <version>${version.groovy.all}</version>
             </dependency>
             <dependency>
                 <groupId>org.spockframework</groupId>
@@ -220,85 +176,9 @@
                 <version>${version.spockframework}</version>
             </dependency>
             <dependency>
-                <groupId>org.springframework</groupId>
-                <artifactId>spring-jdbc</artifactId>
-                <version>${version.spring}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.ws</groupId>
-                <artifactId>spring-ws-support</artifactId>
-                <version>${version.spring.ws-support}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.activemq</groupId>
-                <artifactId>activemq-broker</artifactId>
-                <version>${version.activemq-broker}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework</groupId>
-                <artifactId>spring-test</artifactId>
-                <version>${version.spring}</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework</groupId>
-                <artifactId>spring-context</artifactId>
-                <version>${version.spring}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework</groupId>
-                <artifactId>spring-web</artifactId>
-                <version>${version.spring}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.assertj</groupId>
-                <artifactId>assertj-core</artifactId>
-                <version>${version.assertj}</version>
-            </dependency>
-            <dependency>
                 <groupId>com.hierynomus</groupId>
                 <artifactId>sshj</artifactId>
                 <version>${version.sshj}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.yaml</groupId>
-                <artifactId>snakeyaml</artifactId>
-                <version>${version.snakeyaml}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.seleniumhq.selenium</groupId>
-                <artifactId>selenium-java</artifactId>
-                <version>${version.selenium}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>com.codeborne</groupId>
-                        <artifactId>phantomjsdriver</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>net.sourceforge.htmlunit</groupId>
-                        <artifactId>htmlunit</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
-            <dependency>
-                <groupId>io.github.bonigarcia</groupId>
-                <artifactId>webdrivermanager</artifactId>
-                <version>${version.webdrivermanager}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.seleniumhq.selenium</groupId>
-                <artifactId>selenium-chrome-driver</artifactId>
-                <version>${version.selenium}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.h2database</groupId>
-                <artifactId>h2</artifactId>
-                <version>${version.h2}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.httpcomponents</groupId>
-                <artifactId>httpclient</artifactId>
-                <version>${version.apache-httpclient}</version>
             </dependency>
             <dependency>
                 <groupId>org.jbehavesupport</groupId>
@@ -306,61 +186,19 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.jayway.jsonpath</groupId>
-                <artifactId>json-path</artifactId>
-                <version>${version.json-path}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.mockito</groupId>
-                <artifactId>mockito-core</artifactId>
-                <version>${version.mockito-core}</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>junit</groupId>
-                <artifactId>junit</artifactId>
-                <version>${version.junit}</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.slf4j</groupId>
-                <artifactId>jcl-over-slf4j</artifactId>
-                <version>${version.slf4j}</version>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-text</artifactId>
+                <version>${version.commons-text}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>
-                <artifactId>commons-lang3</artifactId>
-                <version>${version.commons-lang3}</version>
+                <artifactId>commons-collections4</artifactId>
+                <version>${version.commons-collections4}</version>
             </dependency>
             <dependency>
-                <groupId>commons-dbcp</groupId>
-                <artifactId>commons-dbcp</artifactId>
-                <version>${version.commons-dbcp}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.codehaus.jackson</groupId>
-                <artifactId>jackson-mapper-asl</artifactId>
-                <version>${version.jackson-mapper-asl}</version>
-            </dependency>
-            <dependency>
-                <groupId>ch.qos.logback</groupId>
-                <artifactId>logback-classic</artifactId>
-                <version>${version.logback}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-core</artifactId>
-                <version>${version.jackson}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-annotations</artifactId>
-                <version>${version.jackson}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-databind</artifactId>
-                <version>${version.jackson}</version>
+                <groupId>org.eclipse.persistence</groupId>
+                <artifactId>org.eclipse.persistence.moxy</artifactId>
+                <version>${version.moxy}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -443,6 +281,26 @@
                             <releaseProfiles>release</releaseProfiles>
                             <goals>deploy</goals>
                         </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <version>${maven-enforcer-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>enforce-versions</id>
+                                <goals>
+                                    <goal>enforce</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <requireJavaVersion>
+                                            <version>${java.version}</version>
+                                        </requireJavaVersion>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>

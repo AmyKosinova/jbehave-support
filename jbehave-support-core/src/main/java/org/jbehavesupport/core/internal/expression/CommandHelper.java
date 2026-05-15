@@ -8,12 +8,13 @@ import java.util.List;
 
 import lombok.NonNull;
 import lombok.experimental.UtilityClass;
+import org.apache.commons.lang3.math.NumberUtils;
 
 @UtilityClass
 public class CommandHelper {
 
     private static final String SPLITTER = "(?<!\\\\):";
-    private static final String KEEPER = "'";
+    private static final String KEEPER = "(?<!\\\\)'";
 
     /**
      * Extract command name from expression.
@@ -56,6 +57,23 @@ public class CommandHelper {
             return commandParts.toArray(new String[]{});
         }
         return new String[]{};
+    }
+
+    /**
+     * Check if all params are numbers
+     *
+     * @param params Object[]
+     * @throws IllegalArgumentException when any param isn't number
+     */
+
+    public static void checkNumericParams(Object... params){
+        Arrays.stream(params).forEach(e -> {
+                isTrue(e instanceof String || e instanceof Number, "Parameter must be String or Number: " + e);
+                if (e instanceof String) {
+                    isTrue(NumberUtils.isCreatable((String) e), "String parameter must be numeric: " + e);
+                }
+            }
+        );
     }
 
 }

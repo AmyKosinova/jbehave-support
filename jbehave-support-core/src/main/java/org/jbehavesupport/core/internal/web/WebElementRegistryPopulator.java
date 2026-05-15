@@ -5,8 +5,9 @@ import static org.apache.commons.lang3.StringUtils.endsWith;
 import java.io.IOException;
 import java.util.List;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 
+import lombok.RequiredArgsConstructor;
 import org.jbehavesupport.core.web.WebSetting;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,14 +16,13 @@ import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class WebElementRegistryPopulator {
 
     private static final String YAML_EXTENSION = ".yaml";
 
-    @Autowired
-    private ResourcePatternResolver resourcePatternResolver;
-    @Autowired
-    private YamlElementLocatorParser yamlElementLocatorParser;
+    private final ResourcePatternResolver resourcePatternResolver;
+    private final YamlElementLocatorParser yamlElementLocatorParser;
     @Autowired(required = false)
     private List<WebSetting> settings;
 

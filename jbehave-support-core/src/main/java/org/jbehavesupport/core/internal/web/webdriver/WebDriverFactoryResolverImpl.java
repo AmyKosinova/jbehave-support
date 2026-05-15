@@ -2,19 +2,19 @@ package org.jbehavesupport.core.internal.web.webdriver;
 
 import java.util.List;
 
+import lombok.Setter;
 import org.jbehavesupport.core.web.WebDriverFactory;
 import org.jbehavesupport.core.web.WebDriverFactoryResolver;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
-@Component
 @RequiredArgsConstructor
 public class WebDriverFactoryResolverImpl implements WebDriverFactoryResolver {
 
     private final List<WebDriverFactory> webDriverFactories;
 
+    @Setter
     @Value("${web.browser:chrome}")
     private String browserName;
 
@@ -25,5 +25,4 @@ public class WebDriverFactoryResolverImpl implements WebDriverFactoryResolver {
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("No WebDriverFactory found for given browser [" + browserName + "]."));
     }
-
 }

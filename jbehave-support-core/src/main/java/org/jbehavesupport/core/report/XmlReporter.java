@@ -3,7 +3,6 @@ package org.jbehavesupport.core.report;
 import static java.lang.System.currentTimeMillis;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
-import static org.apache.commons.lang3.SystemUtils.LINE_SEPARATOR;
 
 import java.io.OutputStreamWriter;
 import java.io.PrintStream;
@@ -16,6 +15,7 @@ import java.util.stream.Collectors;
 
 import org.jbehave.core.model.Story;
 import org.jbehave.core.reporters.XmlOutput;
+import org.jbehave.core.steps.Timing;
 
 public class XmlReporter extends XmlOutput {
 
@@ -49,7 +49,7 @@ public class XmlReporter extends XmlOutput {
     private void println(String... args) {
         for (String arg : args) {
             print(arg);
-            print(LINE_SEPARATOR);
+            print(System.lineSeparator());
         }
     }
 
@@ -71,8 +71,8 @@ public class XmlReporter extends XmlOutput {
     }
 
     @Override
-    public void afterScenario() {
-        super.afterScenario();
+    public void afterScenario(Timing timing) {
+        super.afterScenario(timing);
         printTag(TAG_BEGIN, SCENARIO_REPORT);
         writeExtensions(e -> ReportRenderingPhase.AFTER_SCENARIO.equals(e.getReportRenderingPhase()));
         printTag(TAG_END, SCENARIO_REPORT);

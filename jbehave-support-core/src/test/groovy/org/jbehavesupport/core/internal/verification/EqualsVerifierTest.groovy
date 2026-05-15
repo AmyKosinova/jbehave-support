@@ -12,45 +12,48 @@ import java.time.LocalDate
 class EqualsVerifierTest extends Specification {
 
     @Autowired
-    EqualsVerifier equalsVerifier;
+    EqualsVerifier equalsVerifier
 
     def "Name"() {
         expect:
-        equalsVerifier.name().equals("EQ");
+        equalsVerifier.name() == "EQ"
     }
 
     @Unroll
     "VerifyPositive #actual to #expected"() {
         when:
-        equalsVerifier.verify(actual, expected);
+        equalsVerifier.verify(actual, expected)
 
         then:
         true
 
         where:
-        actual                     | expected
-        ""                         | ""
-        null                       | null
-        "tst"                      | "tst"
-        new LocalDate(2002, 7, 14) | new LocalDate(2002, 7, 14)
-        12                         | 12
+        actual                    | expected
+        ""                        | ""
+        null                      | null
+        "tst"                     | "tst"
+        LocalDate.of(2002, 7, 14) | LocalDate.of(2002, 7, 14)
+        12                        | 12
+        [1, 2, 3, 4] as int[]     | [1, 2, 3, 4] as int[]
     }
 
     @Unroll
     "VerifyNegative #actual to #expected"() {
         when:
-        equalsVerifier.verify(actual, expected);
+        equalsVerifier.verify(actual, expected)
 
         then:
         def exception = thrown(Throwable)
-        exception.getMessage() == message
+        exception.getMessage().contains(message)
 
         where:
-        actual                     | expected                   || message
-        new LocalDate(2002, 7, 15) | new LocalDate(2002, 7, 14) || "value '2002-07-15' is not equal to '2002-07-14'"
-        7                          | 9                          || "value '7' is not equal to '9'"
-        "me"                       | "you"                      || "value 'me' is not equal to 'you'"
-        null                       | "we"                       || "Actual value must be provided"
-        "they"                     | null                       || "value 'they' is not equal to 'null'"
+        actual                    | expected                  || message
+        LocalDate.of(2002, 7, 15) | LocalDate.of(2002, 7, 14) || "value '2002-07-15' is not equal to '2002-07-14'"
+        7                         | 9                         || "value '7' is not equal to '9'"
+        "1.2E3"                   | 1200                      || "value '1.2E3' is not equal to '1200'"
+        "me"                      | "you"                     || "value 'me' is not equal to 'you'"
+        null                      | "we"                      || "Actual value must be provided"
+        "they"                    | null                      || "value 'they' is not equal to 'null'"
+        [1, 2, 3, 4] as int[]     | [4, 3, 2, 1] as int[]     || "is not equal to"
     }
 }

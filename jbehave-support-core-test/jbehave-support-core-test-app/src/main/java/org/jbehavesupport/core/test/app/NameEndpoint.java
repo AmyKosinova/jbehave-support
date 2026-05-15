@@ -2,19 +2,18 @@ package org.jbehavesupport.core.test.app;
 
 import static org.apache.commons.lang3.Validate.isTrue;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
 
+import lombok.RequiredArgsConstructor;
 import org.jbehavesupport.core.test.app.oxm.Error;
 import org.jbehavesupport.core.test.app.oxm.NameRequest;
 import org.jbehavesupport.core.test.app.oxm.NameResponse;
 import org.jbehavesupport.core.test.app.oxm.ObjectFactory;
 import org.jbehavesupport.core.test.app.oxm.Relative;
 
-import org.apache.commons.io.FileUtils;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.ws.server.endpoint.annotation.Endpoint;
 import org.springframework.ws.server.endpoint.annotation.PayloadRoot;
@@ -22,11 +21,12 @@ import org.springframework.ws.server.endpoint.annotation.RequestPayload;
 import org.springframework.ws.server.endpoint.annotation.ResponsePayload;
 
 @Endpoint
+@RequiredArgsConstructor
 public class NameEndpoint {
     private static final ObjectFactory OBJECT_FACTORY = new ObjectFactory();
+    private static final String IMAGE_NAME = "image.png";
 
-    @Autowired
-    ResourceLoader resourceLoader;
+    final ResourceLoader resourceLoader;
 
     @PayloadRoot(namespace = "http://jbehavesupport.org/definitions", localPart = "NameRequest")
     @ResponsePayload
@@ -66,10 +66,12 @@ public class NameEndpoint {
     }
 
     private String validateFile(final byte[] photo, final String filePath) {
+        // since we cant access the original path because it can be on different file system (e.g. in CI where the app is in container and does not share FS)
+        // we just check if the image sent is the same as the one we have in the resources (we expect the image.png in the test resources to be the same as the app resources)
         try {
-            File targetFile = new File(filePath);
-            if (targetFile.isFile()) {
-                byte[] expected = FileUtils.readFileToByteArray(targetFile);
+            if (filePath.endsWith(IMAGE_NAME)) {
+                Resource targetPhoto = resourceLoader.getResource("classpath:" + IMAGE_NAME);
+                byte[] expected = targetPhoto.getContentAsByteArray();
                 if (Arrays.equals(photo, expected)) {
                     return "file validated";
                 }

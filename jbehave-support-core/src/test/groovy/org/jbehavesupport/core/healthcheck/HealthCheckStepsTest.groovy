@@ -1,9 +1,8 @@
 package org.jbehavesupport.core.healthcheck
 
-
+import org.assertj.core.error.AssertJMultipleFailuresError
 import org.jbehave.core.model.ExamplesTable
 import org.jbehavesupport.core.TestConfig
-import org.junit.runners.model.MultipleFailureException
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.test.context.ContextConfiguration
 import spock.lang.Specification
@@ -14,7 +13,7 @@ import static groovy.test.GroovyAssert.shouldFail
 class HealthCheckStepsTest extends Specification {
 
     @Autowired
-    HealthCheckSteps healthCheckSteps;
+    HealthCheckSteps healthCheckSteps
 
     def "CheckComponentsAreHealthy"() {
 
@@ -31,7 +30,7 @@ class HealthCheckStepsTest extends Specification {
         ExamplesTable examplesTable = new ExamplesTable(
                 "| component | \n" +
                 "| SICK      |")
-        MultipleFailureException fail = shouldFail(MultipleFailureException.class) {
+        AssertJMultipleFailuresError fail = shouldFail(AssertJMultipleFailuresError.class) {
             healthCheckSteps.checkComponentsAreHealthy(examplesTable)
         }
 
@@ -51,6 +50,6 @@ class HealthCheckStepsTest extends Specification {
         }
 
         then:
-        fail.getMessage().equals("HealthCheckSteps requires single HealthCheck bean with qualifier [MISS]")
+        fail.getMessage() == "HealthCheckSteps requires single HealthCheck bean with qualifier [MISS]"
     }
 }

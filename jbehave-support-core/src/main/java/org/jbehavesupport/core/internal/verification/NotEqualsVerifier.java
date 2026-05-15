@@ -1,6 +1,7 @@
 package org.jbehavesupport.core.internal.verification;
 
-import static org.jbehavesupport.core.internal.verification.VerifierNames.*;
+import static org.jbehavesupport.core.internal.util.ArrayComparator.arraysEquals;
+import static org.jbehavesupport.core.verification.VerifierNames.NE;
 import static org.springframework.util.Assert.notNull;
 
 import org.springframework.stereotype.Component;
@@ -24,8 +25,14 @@ public final class NotEqualsVerifier extends AbstractVerifier {
         if (actual.equals(expected)) {
             throwAssertionError(MESSAGE, actual, expected);
         }
+
+        if (actual.getClass().isArray() && expected != null && expected.getClass().isArray() && arraysEquals(actual, expected)) {
+            throwAssertionError(MESSAGE, actual, expected);
+        }
+
         if (actual.toString().equals(String.valueOf(expected))) {
             throwAssertionError(MESSAGE, actual, expected);
         }
     }
+
 }

@@ -1,11 +1,11 @@
 package org.jbehavesupport.core.internal.web.waitcondition;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
+import java.time.Duration;
 
+import org.jbehavesupport.core.web.WebElementLocator;
 import org.jbehavesupport.core.web.WebElementRegistry;
 import org.jbehavesupport.core.web.WebWaitCondition;
 import org.jbehavesupport.core.web.WebWaitConditionContext;
-
 import org.openqa.selenium.By;
 import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.WebDriver;
@@ -20,14 +20,16 @@ public abstract class AbstractWebWaitCondition implements WebWaitCondition {
     private WebDriver driver;
     @Autowired
     private WebElementRegistry elementRegistry;
+    @Autowired
+    private WebElementLocator webElementLocator;
 
     @Value("${web.timeout:10}")
     private Long timeout;
 
-    protected final FluentWait<WebDriver> wait(WebWaitConditionContext ctx) {
+    protected final FluentWait<WebDriver> fluentWait() {
         return new FluentWait<>(driver)
-            .pollingEvery(1, SECONDS)
-            .withTimeout(timeout, SECONDS)
+            .pollingEvery(Duration.ofSeconds(1))
+            .withTimeout(Duration.ofSeconds(timeout))
             .ignoring(NoSuchElementException.class);
     }
 
@@ -36,7 +38,7 @@ public abstract class AbstractWebWaitCondition implements WebWaitCondition {
     }
 
     protected final WebElement findElement(WebWaitConditionContext ctx) {
-        return driver.findElement(getLocator(ctx));
+        return webElementLocator.findElement(ctx.getPage(), ctx.getElement());
     }
 
 }
